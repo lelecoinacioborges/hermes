@@ -2,7 +2,6 @@ services:
   # ── Redis (Rate Limiting & Cache para OmniRoute) ──────────────────────────
   redis:
     image: redis:alpine
-    container_name: omniroute-redis
     restart: unless-stopped
     command: redis-server --save 60 1 --loglevel warning
     volumes:
@@ -13,10 +12,9 @@ services:
   # ── OmniRoute (AI Gateway Unificado) ──────────────────────────────────────
   omniroute:
     image: diegosouzapw/omniroute:latest
-    container_name: omniroute
     restart: unless-stopped
     ports:
-      - "${OMNIROUTE_PORT:-20128}:20128"
+      - "20128:20128"
     environment:
       - PORT=20128
       - DASHBOARD_PORT=20128
@@ -24,9 +22,9 @@ services:
       - DATA_DIR=/app/data
       - NODE_ENV=production
       - REQUIRE_API_KEY=false
-      - REDIS_URL=redis://omniroute-redis:6379
+      - REDIS_URL=redis://redis:6379
     volumes:
-      - ./data/omniroute:/app/data
+      - omniroute-data:/app/data
     depends_on:
       - redis
     networks:
@@ -35,13 +33,9 @@ services:
   # ── Hermes Agent (Agente Autônomo com Web UI & Gateway) ───────────────────
   hermes:
     image: nousresearch/hermes-agent:latest
-    container_name: hermes
     restart: unless-stopped
     stdin_open: true
     tty: true
-    ports:
-      - "${HERMES_DASHBOARD_PORT:-9119}:9119"
-      - "${HERMES_GATEWAY_PORT:-8642}:8642"
     environment:
       - HERMES_HOME=/opt/data
       - HERMES_INFERENCE_MODEL=${HERMES_INFERENCE_MODEL:-auto}
@@ -56,7 +50,7 @@ services:
       - HERMES_DASHBOARD_BASIC_AUTH_USERNAME=admin
       - HERMES_DASHBOARD_BASIC_AUTH_PASSWORD=admin
     volumes:
-      - ./data/hermes:/opt/data
+      - hermes-data:/opt/data
       - hermes-agent-src:/opt/hermes
     depends_on:
       - omniroute
@@ -66,7 +60,6 @@ services:
   # ── Hermes WebUI (Interface Gráfica Moderna / Chat Web & Desktop) ────────
   hermes-webui:
     image: ghcr.io/nesquena/hermes-webui:latest
-    container_name: hermes-webui
     restart: unless-stopped
     ports:
       - "8787:8787"
@@ -79,9 +72,9 @@ services:
       - WANTED_UID=1000
       - WANTED_GID=1000
     volumes:
-      - ./data/hermes:/home/hermeswebui/.hermes
+      - hermes-data:/home/hermeswebui/.hermes
       - hermes-agent-src:/home/hermeswebui/.hermes/hermes-agent:ro
-      - ./data/hermes/workspace:/workspace
+      - hermes-workspace:/workspace
     depends_on:
       - hermes
     networks:
@@ -89,9 +82,11 @@ services:
 
 networks:
   hermes-net:
-    name: hermes-net
     driver: bridge
 
 volumes:
   redis-data:
+  omniroute-data:
+  hermes-data:
+  hermes-workspace:
   hermes-agent-src:
