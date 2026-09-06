@@ -6,8 +6,6 @@ services:
     command: redis-server --save 60 1 --loglevel warning
     volumes:
       - redis-data:/data
-    networks:
-      - hermes-net
 
   # ── OmniRoute (AI Gateway Unificado) ──────────────────────────────────────
   omniroute:
@@ -27,9 +25,6 @@ services:
       - omniroute-data:/app/data
     depends_on:
       - redis
-    networks:
-      - hermes-net
-      - easypanel-internal
 
   # ── Hermes Agent (Agente Autônomo com Web UI & Gateway) ───────────────────
   hermes:
@@ -55,8 +50,6 @@ services:
       - hermes-agent-src:/opt/hermes
     depends_on:
       - omniroute
-    networks:
-      - hermes-net
 
   # ── Hermes WebUI (Interface Gráfica Moderna / Chat Web & Desktop) ────────
   hermes-webui:
@@ -82,15 +75,6 @@ services:
       - hermes-workspace:/workspace
     depends_on:
       - hermes
-    networks:
-      - hermes-net
-      - easypanel-internal
-
-networks:
-  hermes-net:
-    driver: bridge
-  easypanel-internal:
-    external: true
 
 volumes:
   redis-data:
