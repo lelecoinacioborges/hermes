@@ -57,6 +57,7 @@ services:
       - HERMES_DASHBOARD_BASIC_AUTH_PASSWORD=admin
     volumes:
       - ./data/hermes:/opt/data
+      - hermes-agent-src:/opt/hermes
     depends_on:
       - omniroute
     networks:
@@ -94,4 +95,3 @@ networks:
 volumes:
   redis-data:
   hermes-agent-src:
-    external: true
