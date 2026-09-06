@@ -1,0 +1,17 @@
+﻿# Arquivos de dados locais e bancos
+data/
+*.sqlite*
+*.db*
+*.log
+
+# Variáveis locais sensíveis
+.env
+
+# Instaladores de desktop (pesados para git)
+*.exe
+
+# Caches e temporários
+__pycache__/
+*.tmp
+.venv/
+node_modules/
