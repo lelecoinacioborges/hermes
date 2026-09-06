@@ -29,6 +29,7 @@ services:
       - redis
     networks:
       - hermes-net
+      - easypanel-internal
 
   # ── Hermes Agent (Agente Autônomo com Web UI & Gateway) ───────────────────
   hermes:
@@ -79,10 +80,13 @@ services:
       - hermes
     networks:
       - hermes-net
+      - easypanel-internal
 
 networks:
   hermes-net:
     driver: bridge
+  easypanel-internal:
+    external: true
 
 volumes:
   redis-data:
