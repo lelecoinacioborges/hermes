@@ -65,6 +65,7 @@ services:
       - HERMES_WEBUI_PORT=8787
       - HERMES_WEBUI_STATE_DIR=/home/hermeswebui/.hermes/webui
       - HERMES_API_URL=http://hermes:8642
+      - HERMES_WEBUI_PASSWORD=${HERMES_WEBUI_PASSWORD:-}
       - OPENAI_BASE_URL=${OPENAI_BASE_URL:-http://omniroute:20128/v1}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-343264ed9bd5abd7-c61762-5c68911f}
       - CUSTOM_BASE_URL=${CUSTOM_BASE_URL:-http://omniroute:20128/v1}
