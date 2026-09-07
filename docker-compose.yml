@@ -33,7 +33,9 @@ services:
     stdin_open: true
     tty: true
     environment:
-      - HERMES_HOME=/opt/data
+      - HERMES_HOME=/home/hermes/.hermes
+      - HERMES_UID=1000
+      - HERMES_GID=1000
       - HERMES_INFERENCE_MODEL=${HERMES_INFERENCE_MODEL:-teste}
       - OPENAI_BASE_URL=${OPENAI_BASE_URL:-http://omniroute:20128/v1}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-343264ed9bd5abd7-c61762-5c68911f}
@@ -46,7 +48,7 @@ services:
       - HERMES_DASHBOARD_BASIC_AUTH_USERNAME=admin
       - HERMES_DASHBOARD_BASIC_AUTH_PASSWORD=admin
     volumes:
-      - hermes-data:/opt/data
+      - hermes-data:/home/hermes/.hermes
       - hermes-agent-src:/opt/hermes
     depends_on:
       - omniroute
