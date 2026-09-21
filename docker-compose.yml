@@ -29,6 +29,7 @@ services:
   # ── Hermes Agent (Agente Autônomo com Web UI & Gateway) ───────────────────
   hermes:
     image: nousresearch/hermes-agent:latest
+    pull_policy: always
     restart: unless-stopped
     stdin_open: true
     tty: true
@@ -56,6 +57,7 @@ services:
   # ── Hermes WebUI (Interface Gráfica Moderna / Chat Web & Desktop) ────────
   hermes-webui:
     image: ghcr.io/nesquena/hermes-webui:latest
+    pull_policy: always
     restart: unless-stopped
     ports:
       - "8787:8787"
