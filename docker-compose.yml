@@ -50,7 +50,7 @@ services:
       - HERMES_DASHBOARD_BASIC_AUTH_PASSWORD=admin
     volumes:
       - hermes-data:/home/hermes/.hermes
-      - hermes-agent-src:/opt/hermes
+      - hermes-agent-src-v2:/opt/hermes
     depends_on:
       - omniroute
 
@@ -76,7 +76,7 @@ services:
       - WANTED_GID=1000
     volumes:
       - hermes-data:/home/hermeswebui/.hermes
-      - hermes-agent-src:/home/hermeswebui/.hermes/hermes-agent:ro
+      - hermes-agent-src-v2:/home/hermeswebui/.hermes/hermes-agent:ro
       - hermes-workspace:/workspace
     depends_on:
       - hermes
@@ -86,4 +86,4 @@ volumes:
   omniroute-data:
   hermes-data:
   hermes-workspace:
-  hermes-agent-src:
+  hermes-agent-src-v2:
