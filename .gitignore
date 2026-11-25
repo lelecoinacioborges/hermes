@@ -1,11 +1,17 @@
-﻿# Arquivos de dados locais e bancos
-data/
+﻿# Arquivos de dados locais e bancos (apenas na raiz)
+/data/
 *.sqlite*
 *.db*
 *.log
 
+# Runtime do agente Zupoo (persistido em volume no Docker)
+zupoo-locadora-agente/logs/*
+zupoo-locadora-agente/data/sessions.json
+zupoo-locadora-agente/data/lista_espera.json
+
 # Variáveis locais sensíveis
 .env
+**/.env
 
 # Instaladores de desktop (pesados para git)
 *.exe

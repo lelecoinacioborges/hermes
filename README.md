@@ -12,6 +12,7 @@ Ambiente completo e integrado com **Hermes Agent**, **OmniRoute** e **Hermes Web
 | **OmniRoute** | `20128` | Dashboard de Provedores e Gateway de IA |
 | **Hermes Dashboard** | `9119` | Painel de monitoramento nativo do Hermes |
 | **Hermes Gateway API**| `8642` | API interna do agente |
+| **Zupoo Webhook (WAHA)** | `8081` | Servidor webhook do agente de atendimento (`POST /webhook/waha`, `GET /health`) |
 
 ---
 
@@ -30,8 +31,17 @@ Ambiente completo e integrado com **Hermes Agent**, **OmniRoute** e **Hermes Web
    - `HERMES_GATEWAY_PORT=8642`
    - `OPENAI_API_KEY=sk-...` (sua chave gerada no OmniRoute)
    - `CUSTOM_API_KEY=sk-...`
-5. No Easypanel, exponha a porta `8787` com o seu domínio público (ex: `hermes.seudominio.com`) para acessar o chat Web moderno.
-6. Se desejar acessar o painel do OmniRoute para cadastrar chaves de IA, exponha a porta `20128` (ex: `omniroute.seudominio.com`).
+   - `WAHA_URL=https://infra-waha.gvlvvh.easypanel.host`
+   - `WAHA_API_KEY=...` (chave da API do WAHA)
+   - `WAHA_SESSION=5511993751000`
+   - `ZUPOO_RESPONDER_APENAS=5511977556050@c.us` (troque para `*` quando quiser liberar para todos os leads)
+   - `ZUPOO_WEBHOOK_PORT=8081`
+   - `ZUPOO_WEBHOOK_URL=https://webhook-hermes.movilo.com.br/webhook/waha`
+5. No Easypanel, exponha a porta `8787` do serviço `hermes-webui` com o seu domínio público (ex: `hermes.seudominio.com`) para acessar o chat Web moderno.
+6. Exponha a porta `8081` do serviço `hermes` no domínio `webhook-hermes.movilo.com.br` para receber os webhooks do WAHA (`/webhook/waha` e `/health`).
+7. Se desejar acessar o painel do OmniRoute para cadastrar chaves de IA, exponha a porta `20128` (ex: `omniroute.seudominio.com`).
+
+> O servidor webhook do agente Zupoo inicia automaticamente dentro do container `hermes` (com reinício automático em caso de falha e subida automática quando a VPS reiniciar via `restart: unless-stopped`). Os dados (`lista_espera.json`, `sessions.json`) e logs ficam persistidos no volume `hermes-data` em `/home/hermes/.hermes/zupoo-locadora-agente/`.
 
 ---
 

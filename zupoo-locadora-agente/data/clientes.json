@@ -1,0 +1,74 @@
+[
+  {
+    "id": "CLI-001",
+    "nome": "Carlos Andrade",
+    "telefone": "(11) 98765-4321",
+    "modelo": "Honda CG 160 Fan",
+    "valor_semanal": 37.0,
+    "plano": "Semestral (6 meses)",
+    "semanas": 26,
+    "data_inicio": "2026-07-01",
+    "dia_pagamento": "quarta-feira",
+    "status": "ativo"
+  },
+  {
+    "id": "CLI-002",
+    "nome": "Mariana Souza",
+    "telefone": "(11) 97654-3210",
+    "modelo": "Honda Pop 110i",
+    "valor_semanal": 29.0,
+    "plano": "Semestral (6 meses)",
+    "semanas": 26,
+    "data_inicio": "2026-06-15",
+    "dia_pagamento": "segunda-feira",
+    "status": "ativo"
+  },
+  {
+    "id": "CLI-003",
+    "nome": "João Pedro Lima",
+    "telefone": "(21) 96543-2109",
+    "modelo": "Yamaha Fazer 250",
+    "valor_semanal": 45.0,
+    "plano": "Semestral (6 meses)",
+    "semanas": 26,
+    "data_inicio": "2026-05-20",
+    "dia_pagamento": "sexta-feira",
+    "status": "ativo"
+  },
+  {
+    "id": "CLI-004",
+    "nome": "Fernanda Oliveira",
+    "telefone": "(31) 95432-1098",
+    "modelo": "Honda CB 500F",
+    "valor_semanal": 57.0,
+    "plano": "Semestral (6 meses)",
+    "semanas": 26,
+    "data_inicio": "2026-04-10",
+    "dia_pagamento": "terça-feira",
+    "status": "ativo"
+  },
+  {
+    "id": "CLI-005",
+    "nome": "Rafael Santos",
+    "telefone": "(41) 94321-0987",
+    "modelo": "Honda Bros 160",
+    "valor_semanal": 42.0,
+    "plano": "Semestral (6 meses)",
+    "semanas": 26,
+    "data_inicio": "2026-03-05",
+    "dia_pagamento": "quinta-feira",
+    "status": "inadimplente"
+  },
+  {
+    "id": "CLI-006",
+    "nome": "Beatriz Costa",
+    "telefone": "(51) 93210-9876",
+    "modelo": "Yamaha MT-03",
+    "valor_semanal": 53.0,
+    "plano": "Semestral (6 meses)",
+    "semanas": 26,
+    "data_inicio": "2026-08-01",
+    "dia_pagamento": "sábado",
+    "status": "ativo"
+  }
+]
