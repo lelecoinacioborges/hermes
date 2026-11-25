@@ -399,8 +399,9 @@ def _despachar_lote(chat):
             print(f"[erro] exceção ao processar lote de {chat}: {e}", flush=True)
             traceback.print_exc()
 class Handler(BaseHTTPRequestHandler):
-    def log_message(self, fmt, *args):  # logs mais curtos
-        print("  [http]", fmt % args, flush=True)
+    def log_message(self, fmt, *args):
+        # Silencia log HTTP bruto (evita spam de eventos de outras sessões do WAHA)
+        return
 
     def _enviar_json(self, status, obj):
         corpo = json.dumps(obj).encode("utf-8")
