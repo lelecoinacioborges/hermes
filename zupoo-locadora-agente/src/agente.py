@@ -81,6 +81,24 @@ ARQUIVO_SUPORTE = os.path.join(DATA, "suporte.json")
 SILENCIO_HORAS = float(os.environ.get("ZUPOO_SILENCIO_HORAS", "6"))
 ETAPAS_FINALIZADAS = ("cadastrado", "recusou", "restaurante_transferido", "suporte_transferido")
 
+# Horário de atendimento humano (Brasília, UTC-3)
+FUSO_BRASILIA = datetime.timezone(datetime.timedelta(hours=-3))
+HORARIO_INICIO = int(os.environ.get("ZUPOO_HORARIO_INICIO", "9"))
+HORARIO_FIM = int(os.environ.get("ZUPOO_HORARIO_FIM", "18"))
+
+
+def _em_horario_comercial(agora=None) -> bool:
+    dt = agora if agora is not None else datetime.datetime.now(FUSO_BRASILIA)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=FUSO_BRASILIA)
+    else:
+        dt = dt.astimezone(FUSO_BRASILIA)
+    return HORARIO_INICIO <= dt.hour < HORARIO_FIM
+
+
+def _faixa_horario() -> str:
+    return f"*{HORARIO_INICIO:02d}h às {HORARIO_FIM:02d}h*"
+
 # --- Mensagens --------------------------------------------------------------
 
 MENU = (
@@ -102,13 +120,44 @@ REDIRECIONA = (
 SUPORTE_INICIO = (
     "Claro! 💬 Vai ser um prazer te ajudar.\n\n"
     "Pode me contar qual é a sua *dúvida* ou o que você precisa — se eu não "
-    "conseguir responder na hora, já encaminho direto para um atendente humano!"
+    "conseguir responder na hora, já deixo encaminhado para a nossa equipe!"
 )
 
 SUPORTE_TRANSFERIDO = (
     "Anotado! ✅ Já encaminhei a sua mensagem para a nossa equipe de suporte.\n\n"
     "Um atendente humano vai continuar o atendimento com você por aqui em instantes. 💬😊"
 )
+
+def _msg_suporte_transferido(agora=None) -> str:
+    if _em_horario_comercial(agora):
+        return SUPORTE_TRANSFERIDO
+    return (
+        "Anotado! ✅ Já registrei sua mensagem para a nossa equipe de suporte.\n\n"
+        f"Nosso atendimento humano funciona das {_faixa_horario()} — sua mensagem já ficou "
+        "na nossa fila e será respondida por ordem de chegada assim que voltarmos! 💬😊"
+    )
+
+
+def _msg_chama_atendente(agora=None) -> str:
+    if _em_horario_comercial(agora):
+        return CHAMA_ATENDENTE
+    return (
+        "Anotado! 😊 No momento estamos fora do nosso horário de atendimento humano "
+        f"(das {_faixa_horario()}).\n\n"
+        "Fique tranquilo: sua mensagem já entrou na nossa fila e você será atendido "
+        "por ordem de chegada assim que o expediente começar! 💬"
+    )
+
+
+def _msg_restaurante_em_analise(agora=None) -> str:
+    if _em_horario_comercial(agora):
+        return RESTAURANTE_BAIRRO_EM_ANALISE
+    return (
+        "Perfeito! ✅ Já anotei todos os dados do seu restaurante.\n\n"
+        f"Nosso atendimento humano funciona das {_faixa_horario()}. Assim que o expediente "
+        f"começar, nossa equipe vai verificar a cobertura da *{MARCA}* no seu bairro e "
+        "entrar em contato por ordem de chegada para dar sequência ao cadastro! 🍽️😊"
+    )
 
 RESTAURANTE_ATENDENTE = (
     "Que alegria ter você com a gente! 🍽️✨\n\n"
@@ -852,7 +901,7 @@ def responder(mensagem: str, telefone: str = None, nome: str = None) -> str:
             return duvida_rest + "\n\nSe precisar falar com um atendente, é só me escrever aqui 😊"
         sessao = _atualizar(telefone, sessao, nome_usuario=nome or sessao.get("nome_usuario"), etapa="suporte_transferido", avisado=True)
         _adicionar_suporte(telefone, mensagem, nome=nome or "")
-        return _com_registro(SUPORTE_TRANSFERIDO, sessao, telefone)
+        return _com_registro(_msg_suporte_transferido(), sessao, telefone)
 
     if sessao.get("etapa") == "suporte_transferido":
         return ""
@@ -878,7 +927,7 @@ def responder(mensagem: str, telefone: str = None, nome: str = None) -> str:
             if bairro:
                 sessao = _atualizar(telefone, sessao, cidade=cidade, bairro=bairro, etapa="restaurante_transferido", avisado=True)
                 _adicionar_restaurante(telefone, sessao.get("nome_usuario", ""), cidade, bairro)
-                return _com_registro(RESTAURANTE_BAIRRO_EM_ANALISE, sessao, telefone)
+                return _com_registro(_msg_restaurante_em_analise(), sessao, telefone)
             sessao = _atualizar(telefone, sessao, cidade=cidade, etapa="restaurante_bairro")
             return _com_registro(RESTAURANTE_PEDE_BAIRRO, sessao, telefone)
         local = _extrair_local(mensagem, t)
@@ -886,7 +935,7 @@ def responder(mensagem: str, telefone: str = None, nome: str = None) -> str:
             return _com_registro("Não peguei 😅 Em qual *bairro* fica o seu restaurante?", sessao, telefone)
         sessao = _atualizar(telefone, sessao, bairro=local, etapa="restaurante_transferido", avisado=True)
         _adicionar_restaurante(telefone, sessao.get("nome_usuario", ""), sessao.get("cidade", ""), local)
-        return _com_registro(RESTAURANTE_BAIRRO_EM_ANALISE, sessao, telefone)
+        return _com_registro(_msg_restaurante_em_analise(), sessao, telefone)
 
     if sessao.get("etapa") == "restaurante_transferido":
         return ""
@@ -907,11 +956,11 @@ def responder(mensagem: str, telefone: str = None, nome: str = None) -> str:
                 _atualizar(telefone, sessao, avisado=True)
                 return DESPEDIDA_ACOLHEDORA
             _atualizar(telefone, sessao, avisado=True)
-            return CHAMA_ATENDENTE
+            return _msg_chama_atendente()
         if sessao.get("avisado"):
             return ""
         _atualizar(telefone, sessao, avisado=True)
-        return CHAMA_ATENDENTE
+        return _msg_chama_atendente()
 
     # 5. Dúvida no meio do fluxo da locadora: responde e retoma de onde parou.
     duvida = _responder_duvida(t)
@@ -963,7 +1012,7 @@ def responder(mensagem: str, telefone: str = None, nome: str = None) -> str:
         sessao = _atualizar(telefone, sessao, tentativas=tentativas)
         if tentativas >= 2:
             sessao = _atualizar(telefone, sessao, etapa="recusou", avisado=True)
-            return _com_registro(CHAMA_ATENDENTE, sessao, telefone)
+            return _com_registro(_msg_chama_atendente(), sessao, telefone)
         return _com_registro(RECONFIRMA_LISTA, sessao, telefone)
 
     # Estado desconhecido: reinicia sem deixar o chamador sem resposta.
