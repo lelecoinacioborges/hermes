@@ -195,6 +195,7 @@ def _processar_mensagem(evento):
 
     # Nunca responde ao próprio eco (mensagens que o agente enviou)
     if _ja_enviamos(msg_id):
+        print(f"[eco] ignorando msg_id já processado: {msg_id}", flush=True)
         return False, None
 
     # Marca como processada independente do desfecho (evita re-resposta em retries)
@@ -210,11 +211,13 @@ def _processar_mensagem(evento):
 
     # Mensagem enviada pela própria conta (self-chat de teste): só com permissão
     if from_me and not ACEITAR_SELFCHAT:
+        print(f"[ignorado] fromMe=True e ACEITAR_SELFCHAT=False para {remetente}", flush=True)
         return False, None
 
     resposta_bruta = agente.responder(corpo, telefone=telefone_ident, nome=nome)
     texto, registro = _separar_registro(resposta_bruta)
     if not texto:
+        print(f"[silencio] agente retornou resposta vazia para {remetente} (sessão já finalizada/avisada; envie #reset para reiniciar)", flush=True)
         return False, None
     return True, texto
 
@@ -274,7 +277,12 @@ def _despachar_lote(chat):
     with _LOCK:
         item = _PENDENTES.pop(chat, None)
     if item:
-        _processar_lote(item["eventos"])
+        try:
+            _processar_lote(item["eventos"])
+        except Exception as e:
+            import traceback
+            print(f"[erro] exceção ao processar lote de {chat}: {e}", flush=True)
+            traceback.print_exc()
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):  # logs mais curtos
         print("  [http]", fmt % args, flush=True)

@@ -616,6 +616,12 @@ def responder(mensagem: str, telefone: str = None, nome: str = None) -> str:
     if not mensagem:
         return ""
     t = _normalizar(mensagem)
+
+    # Comando utilitário para reiniciar a sessão durante testes no WhatsApp
+    if t in ("#reset", "/reset"):
+        clear_session(telefone)
+        return "🔄 Sessão reiniciada! Pode mandar uma nova mensagem para começar do zero."
+
     sessao = get_session(telefone) or {}
 
     # Se o cliente mudar explicitamente de assunto, troca de fluxo sem manter
