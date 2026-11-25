@@ -78,6 +78,8 @@ PLANOS = _ler_md("planos.md")
 ARQUIVO_ESPERA = os.path.join(DATA, "lista_espera.json")
 ARQUIVO_RESTAURANTES = os.path.join(DATA, "restaurantes.json")
 ARQUIVO_SUPORTE = os.path.join(DATA, "suporte.json")
+SILENCIO_HORAS = float(os.environ.get("ZUPOO_SILENCIO_HORAS", "6"))
+ETAPAS_FINALIZADAS = ("cadastrado", "recusou", "restaurante_transferido", "suporte_transferido")
 
 # --- Mensagens --------------------------------------------------------------
 
@@ -382,8 +384,24 @@ def _buscar_modelo(texto: str):
 def _atualizar(telefone, sessao, **campos):
     nova = dict(sessao)
     nova.update(campos)
+    nova["atualizado_em"] = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
     set_session(telefone, nova)
     return nova
+
+
+def _sessao_expirada(sessao) -> bool:
+    """Retorna True se a última interação da sessão passou de SILENCIO_HORAS (padrão 6h)."""
+    ts = (sessao or {}).get("atualizado_em")
+    if not ts:
+        return False
+    try:
+        dt = datetime.datetime.fromisoformat(ts)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=datetime.timezone.utc)
+        agora = datetime.datetime.now(datetime.timezone.utc)
+        return (agora - dt).total_seconds() >= SILENCIO_HORAS * 3600
+    except ValueError:
+        return False
 
 
 # --- Roteamento entre os dois negócios --------------------------------------
@@ -505,12 +523,14 @@ def _responder_duvida(t: str):
     A ordem importa: caução casa com "valor", então vem antes de preço.
     """
     if any(p in t for p in ("caucao", "cnh", "habilitacao", "documento", "documentos",
-                            "idade", "comprovante", "requisito", "requisitos", "exige")):
+                            "comprovante", "requisito", "requisitos", "exige")) or re.search(r"\bidade\b", t):
         return RESP_ATENDENTE
 
     if any(p in t for p in ("quando chega", "quando vai chegar", "quando tem", "que dia",
                             "qual data", "prazo", "previsao", "quando exatamente",
-                            "qnd chega", "qndo chega", "qnd vai", "qnd tem")):
+                            "qnd chega", "qndo chega", "qnd vai", "qnd tem",
+                            "ja chegou", "chegou", "novidade", "alguma noticia",
+                            "ja tem moto", "tem moto", "liberou", "disponivel")):
         return RESP_PRAZO
 
     if any(p in t for p in ("reservar", "reserva", "garantir", "separar uma", "guardar uma")):
@@ -760,6 +780,11 @@ def responder(mensagem: str, telefone: str = None, nome: str = None) -> str:
         return "🔄 Sessão e cadastro de teste reiniciados! Pode mandar uma nova mensagem para começar do zero."
 
     sessao = get_session(telefone) or {}
+
+    # Após SILENCIO_HORAS (padrão 6h) de uma conversa finalizada, reabre como novo contato
+    if sessao.get("etapa") in ETAPAS_FINALIZADAS and _sessao_expirada(sessao):
+        clear_session(telefone)
+        sessao = {}
 
     # Se o cliente mudar explicitamente de assunto, troca de fluxo sem manter
     # cidade/bairro/plano do atendimento anterior. Usa regras estritas para não
