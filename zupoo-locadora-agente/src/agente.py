@@ -77,12 +77,14 @@ PLANOS = _ler_md("planos.md")
 
 ARQUIVO_ESPERA = os.path.join(DATA, "lista_espera.json")
 ARQUIVO_RESTAURANTES = os.path.join(DATA, "restaurantes.json")
+ARQUIVO_SUPORTE = os.path.join(DATA, "suporte.json")
 
 # --- Mensagens --------------------------------------------------------------
 
 MENU = (
     "1️⃣ 🏍️ *Alugar uma moto*\n"
-    "2️⃣ 🍽️ *Cadastrar meu restaurante*"
+    "2️⃣ 🍽️ *Cadastrar meu restaurante*\n"
+    "3️⃣ 💬 *Dúvidas ou suporte*"
 )
 
 BOAS_VINDAS = (
@@ -90,7 +92,17 @@ BOAS_VINDAS = (
     "Como posso te ajudar hoje?\n" + MENU
 )
 
-REDIRECIONA = "Só pra eu te direcionar certinho 😊 Responda *1* ou *2*:\n\n" + MENU
+REDIRECIONA = "Só pra eu te direcionar certinho 😊 Responda *1*, *2* ou *3*:\n\n" + MENU
+
+SUPORTE_INICIO = (
+    "Claro! 💬 Pode me contar qual é a sua *dúvida* ou o que você precisa?\n\n"
+    "Vou te ajudar ou já encaminhar direto para um atendente humano."
+)
+
+SUPORTE_TRANSFERIDO = (
+    "Anotado! ✅ Já encaminhei sua mensagem para o nosso time de suporte.\n\n"
+    "Um atendente humano vai continuar por aqui em instantes. 💬"
+)
 
 RESTAURANTE_ATENDENTE = (
     "Que bom ter você com a gente! 🍽️\n\n"
@@ -275,6 +287,22 @@ def _adicionar_restaurante(telefone, nome="", cidade="", bairro="") -> bool:
     return True
 
 
+def _adicionar_suporte(telefone, mensagem="", nome="") -> bool:
+    """Grava chamado de suporte em data/suporte.json."""
+    digitos = _digitos_telefone(telefone)
+    if not digitos:
+        return False
+    _salvar_json_lista(ARQUIVO_SUPORTE, {
+        "nome": (nome or "").strip() or "—",
+        "assunto": (mensagem or "").strip(),
+        "telefone": digitos,
+        "chat_id": telefone,
+        "data": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
+        "origem": "whatsapp_suporte",
+    })
+    return True
+
+
 def _buscar_modelo(texto: str):
     for item in CATALOGO:
         nome = _normalizar(item["modelo"])
@@ -327,11 +355,20 @@ PADROES_LOCADORA = (
 )
 
 
+PADROES_SUPORTE = (
+    "suporte", "duvida", "duvidas", "atendente", "falar com alguem",
+    "falar com humano", "humano", "ajuda", "problema", "reclamacao",
+    "financeiro", "boleto", "pagamento", "fatura", "manutencao", "sinistro",
+)
+
+
 def _detectar_vertical(t: str):
     if any(p in t for p in PADROES_RESTAURANTE):
         return "restaurante"
     if any(p in t for p in PADROES_LOCADORA):
         return "locadora"
+    if any(p in t for p in PADROES_SUPORTE):
+        return "suporte"
     return None
 
 
@@ -345,16 +382,24 @@ def _detectar_troca_vertical(vertical_atual: str, t: str):
         if any(p in t for p in PADROES_LOCADORA) and not any(p in t for p in PADROES_TROCA_RESTAURANTE):
             return "locadora"
         return None
+    if vertical_atual == "suporte":
+        if any(p in t for p in ("cadastrar meu", "quero cadastrar", "cadastrar restaurante")):
+            return "restaurante"
+        if any(p in t for p in ("quero alugar", "alugar uma moto", "alugar moto")):
+            return "locadora"
+        return None
     return None
 
 
 def _detectar_escolha_menu(mensagem: str, t: str):
-    """Reconhece '1', '2', emojis (🏍️/🍽️), 'cadastrar' ou texto livre no menu inicial."""
+    """Reconhece '1', '2', '3', emojis (🏍️/🍽️/💬), 'cadastrar' ou texto livre no menu inicial."""
     limpo = (t or "").strip()
     if limpo in ("1", "opcao 1", "opção 1", "um") or "🏍" in (mensagem or ""):
         return "locadora"
     if limpo in ("2", "opcao 2", "opção 2", "dois", "cadastrar", "cadastro") or "🍽" in (mensagem or ""):
         return "restaurante"
+    if limpo in ("3", "opcao 3", "opção 3", "tres") or "💬" in (mensagem or ""):
+        return "suporte"
     if re.search(r"\b(cadastrar|cadastro)\b", limpo) and not any(p in limpo for p in PADROES_LOCADORA):
         return "restaurante"
     return _detectar_vertical(t)
@@ -649,6 +694,9 @@ def responder(mensagem: str, telefone: str = None, nome: str = None) -> str:
         if vertical == "restaurante":
             _atualizar(telefone, sessao, vertical="restaurante", etapa="restaurante")
             return RESTAURANTE_ATENDENTE
+        if vertical == "suporte":
+            _atualizar(telefone, sessao, vertical="suporte", etapa="suporte_assunto")
+            return SUPORTE_INICIO
         if vertical is None:
             _atualizar(telefone, sessao, etapa="escolher")
             return BOAS_VINDAS
@@ -659,12 +707,15 @@ def responder(mensagem: str, telefone: str = None, nome: str = None) -> str:
         _atualizar(telefone, sessao, vertical="locadora", etapa="nome", plano=plano)
         return _saudacao_locadora(plano)
 
-    # 2. Escolha de negócio pendente (aceita 1, 2, emojis ou texto).
+    # 2. Escolha de negócio pendente (aceita 1, 2, 3, emojis ou texto).
     if sessao.get("etapa") == "escolher":
         vertical = _detectar_escolha_menu(mensagem, t)
         if vertical == "restaurante":
             _atualizar(telefone, sessao, vertical="restaurante", etapa="restaurante")
             return RESTAURANTE_ATENDENTE
+        if vertical == "suporte":
+            _atualizar(telefone, sessao, vertical="suporte", etapa="suporte_assunto")
+            return SUPORTE_INICIO
         if vertical == "locadora":
             if _na_lista(telefone):
                 _atualizar(telefone, sessao, vertical="locadora", etapa="cadastrado")
@@ -673,6 +724,23 @@ def responder(mensagem: str, telefone: str = None, nome: str = None) -> str:
                        plano=_plano_citado(t))
             return ESCOLHEU_LOCADORA
         return REDIRECIONA
+
+    # 2b. Fluxo de dúvidas / suporte: tenta responder dúvida conhecida ou encaminha ao humano.
+    if sessao.get("etapa") == "suporte_assunto":
+        if t in SAUDACOES:
+            return "Pode mandar sua dúvida por aqui 😊 Como posso te ajudar?"
+        duvida_loc = _responder_duvida(t)
+        if duvida_loc:
+            return duvida_loc + "\n\nSe precisar de mais alguma coisa ou quiser falar com um atendente, é só me escrever aqui 😊"
+        duvida_rest = _responder_duvida_restaurante(t)
+        if duvida_rest:
+            return duvida_rest + "\n\nSe precisar falar com um atendente, é só me escrever aqui 😊"
+        sessao = _atualizar(telefone, sessao, nome_usuario=nome or sessao.get("nome_usuario"), etapa="suporte_transferido", avisado=True)
+        _adicionar_suporte(telefone, mensagem, nome=nome or "")
+        return _com_registro(SUPORTE_TRANSFERIDO, sessao, telefone)
+
+    if sessao.get("etapa") == "suporte_transferido":
+        return ""
 
     # 3. Fluxo do restaurante: coleta nome, cidade e bairro, persiste e transfere.
     if sessao.get("etapa") in ("restaurante", "restaurante_cidade", "restaurante_bairro"):
