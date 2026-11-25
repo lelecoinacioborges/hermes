@@ -88,41 +88,45 @@ MENU = (
 )
 
 BOAS_VINDAS = (
-    f"Olá! 👋 Seja bem-vindo à *{MARCA}*.\n\n"
-    "Como posso te ajudar hoje?\n" + MENU
+    f"Olá! 👋 Seja muito bem-vindo à *{MARCA}*!\n\n"
+    "Como posso te ajudar hoje? É só responder com o número ou escrever:\n" + MENU
 )
 
-REDIRECIONA = "Só pra eu te direcionar certinho 😊 Responda *1*, *2* ou *3*:\n\n" + MENU
+REDIRECIONA = (
+    "Desculpa, não consegui identificar qual opção você prefere 😊\n\n"
+    "Me responde só com *1*, *2* ou *3* pra eu te direcionar certinho:\n" + MENU
+)
 
 SUPORTE_INICIO = (
-    "Claro! 💬 Pode me contar qual é a sua *dúvida* ou o que você precisa?\n\n"
-    "Vou te ajudar ou já encaminhar direto para um atendente humano."
+    "Claro! 💬 Vai ser um prazer te ajudar.\n\n"
+    "Pode me contar qual é a sua *dúvida* ou o que você precisa — se eu não "
+    "conseguir responder na hora, já encaminho direto para um atendente humano!"
 )
 
 SUPORTE_TRANSFERIDO = (
-    "Anotado! ✅ Já encaminhei sua mensagem para o nosso time de suporte.\n\n"
-    "Um atendente humano vai continuar por aqui em instantes. 💬"
+    "Anotado! ✅ Já encaminhei a sua mensagem para a nossa equipe de suporte.\n\n"
+    "Um atendente humano vai continuar o atendimento com você por aqui em instantes. 💬😊"
 )
 
 RESTAURANTE_ATENDENTE = (
-    "Que bom ter você com a gente! 🍽️\n\n"
-    "O cadastro do seu restaurante é *gratuito* ✅\n\n"
+    "Que alegria ter você com a gente! 🍽️✨\n\n"
+    f"O cadastro do seu restaurante na *{MARCA}* é *100% gratuito* ✅\n\n"
     "Pra começar, *qual é o seu nome?*"
 )
 
 RESTAURANTE_PEDE_CIDADE = "Prazer em te conhecer! 😊\n\nDe qual *cidade* é o seu restaurante?"
-RESTAURANTE_PEDE_BAIRRO = "E em qual *bairro* fica o restaurante?"
+RESTAURANTE_PEDE_BAIRRO = "Perfeito! 📍 E em qual *bairro* o restaurante fica localizado?"
 RESTAURANTE_BAIRRO_EM_ANALISE = (
-    "Perfeito! ✅ Já anotei os dados do seu restaurante.\n\n"
-    "Estamos expandindo a Zupoo bairro a bairro. Vou verificar se já atendemos "
-    "essa região e, assim que confirmar, um atendente entra em contato para "
-    "continuar o cadastro. 🍽️"
+    "Perfeito! ✅ Já anotei todos os dados do seu restaurante.\n\n"
+    f"Estamos expandindo a *{MARCA}* bairro a bairro — vou verificar a cobertura "
+    "da sua região e um de nossos atendentes entrará em contato por aqui para "
+    "dar sequência ao cadastro. Obrigado pelo interesse! 🍽️😊"
 )
 
 RESTAURANTE_TRANSFERIDO = (
-    "Perfeito! ✅ O seu bairro já está na área de atendimento da Zupoo.\n\n"
-    "Vou transferir seu chamado para um atendente, que vai continuar o cadastro "
-    "e explicar os próximos passos. 🍽️"
+    f"Perfeito! ✅ O seu bairro já está na área de atendimento da *{MARCA}*.\n\n"
+    "Vou transferir seu chamado para um de nossos atendentes, que vai continuar "
+    "o cadastro e te explicar os próximos passos! 🍽️😊"
 )
 
 RESP_DUVIDA_RESTAURANTE = (
@@ -132,81 +136,98 @@ RESP_DUVIDA_RESTAURANTE = (
 )
 
 BOAS_VINDAS_LOCADORA = (
-    f"Olá! 👋 Seja bem-vindo à *{MARCA_LOCADORA}* 🏍️\n\n"
+    f"Olá! 👋 Que bom ter você na *{MARCA_LOCADORA}* 🏍️\n\n"
+    "Pra eu te atender direitinho, *como você se chama?*"
+)
+
+ESCOLHEU_LOCADORA = (
+    "Ótima escolha! 🏍️ Vai ser um prazer te ajudar.\n\n"
     "Pra começar, *como você se chama?*"
 )
 
-ESCOLHEU_LOCADORA = "Perfeito! 🏍️\n\nPra começar, *como você se chama?*"
-
-NOME_NAO_ENTENDIDO = "Desculpa, não peguei 😅 *Como posso te chamar?*"
+NOME_NAO_ENTENDIDO = "Desculpa, não peguei seu nome 😅 *Como posso te chamar?*"
 
 PEDE_BAIRRO = "Anotado! 📍\n\nE de qual *bairro* você é?"
 
 AVISO_SEM_MOTO = (
-    "⚠️ *Aviso importante*\n"
-    "No momento estamos *sem motos disponíveis* — a procura foi muito alta e a "
-    "nova frota já está a caminho 🏍️"
+    "⚠️ *Aviso rapidinho:*\n"
+    "No momento estamos *sem motos disponíveis* porque a procura foi muito alta — "
+    "mas a nossa nova frota já está a caminho! 🏍️"
 )
 
-PERGUNTA_LISTA = "Quer entrar na nossa *lista de espera*? Responda *SIM* ou *NÃO*"
+PERGUNTA_LISTA = (
+    "Posso colocar o seu nome na nossa *lista de espera* para você ser avisado "
+    "em primeira mão? Responda *SIM* ou *NÃO* 😊"
+)
 
 RECONFIRMA_LISTA = (
-    "Só confirmando 😊\n\n"
-    "Quer que eu te avise quando a frota chegar? Responda *SIM* ou *NÃO*"
+    "Só pra eu confirmar certinho 😊\n\n"
+    "Quer que eu te avise assim que a nova frota chegar? Pode responder *SIM* ou *NÃO*."
 )
 
 RECUSOU = (
-    "Sem problema! 😊\n\n"
-    "Se mudar de ideia, é só me chamar por aqui — a *lista de espera* fica sempre aberta."
+    "Sem problema nenhum! 😊\n\n"
+    "Fica super à vontade — se mudar de ideia, é só me chamar por aqui que a nossa "
+    "*lista de espera* fica sempre aberta. Qualquer dúvida, estou por aqui! 🏍️"
 )
 
 CHAMA_ATENDENTE = (
-    "Vou chamar um atendente pra te ajudar melhor 😊\n\n"
-    "Já já alguém fala com você por aqui."
+    "Vou chamar um atendente humano pra te ajudar melhor 😊\n\n"
+    "Já já alguém fala com você por aqui!"
+)
+
+DESPEDIDA_ACOLHEDORA = (
+    "Combinado! 😊 Qualquer coisa é só chamar por aqui. Até breve! 🏍️"
 )
 
 JA_CADASTRADO = (
-    "Você já está na nossa *lista de espera* ✅\n\n"
-    "Assim que a frota chegar, você é avisado em primeira mão."
+    "Que bom falar com você de novo! 😊🏍️\n\n"
+    "Já conferi aqui e o seu lugar continua garantido na nossa *lista de espera* ✅ — "
+    "assim que a nova frota chegar, você será avisado em primeira mão!\n\n"
+    "Enquanto isso, tem alguma *dúvida* sobre planos, valores ou posso te ajudar com outra coisa?"
 )
 
-JA_CADASTRADO_OI = "Oi de novo! 😊\n\n" + JA_CADASTRADO
+JA_CADASTRADO_OI = JA_CADASTRADO
 
 RESP_ATENDENTE = (
-    "Essa informação eu ainda não tenho por aqui 😅\n\n"
-    "Um atendente passa todos os detalhes assim que a frota chegar."
+    "Essa informação certinha eu ainda não tenho por aqui 😅\n\n"
+    "Mas pode ficar tranquilo: assim que a frota chegar, um atendente passa "
+    "todos os detalhes pra você."
 )
 
 RESP_PRAZO = (
-    "Ainda *não temos data definida* para a nova frota 🏍️\n\n"
-    "Assim que ela chegar, você é avisado."
+    "Ainda *não temos uma data exata* confirmada para a chegada da nova frota 🏍️\n\n"
+    "Mas assim que ela chegar, você será avisado em primeira mão!"
 )
 
 RESP_RESERVA = (
-    "Não consigo *garantir reserva* enquanto a frota não chega 😔\n\n"
-    "O que dá pra fazer é te colocar na *lista de espera*."
+    "Por enquanto não conseguimos *garantir reserva* antes da chegada da frota 😊\n\n"
+    "Mas colocando seu nome na *lista de espera*, você recebe o aviso com "
+    "prioridade assim que liberar!"
 )
 
 RESP_MODELO = (
-    "Não tenho unidades disponíveis pra confirmar modelo agora 🏍️\n\n"
-    "Quando a frota chegar, um atendente passa todas as opções."
+    "Como estamos aguardando a nova frota, ainda não consigo confirmar os modelos "
+    "disponíveis agora 🏍️\n\n"
+    "Assim que chegar, um atendente te mostra todas as opções!"
 )
 
 RESP_FLEXIVEL = (
-    "Isso mesmo! O *Plano Flexível* fica em *R$ 35 por dia* 👍\n\n"
-    "Se preferir contrato mais longo, o *Plano Anual* sai por *R$ 29 por dia*."
+    "Isso mesmo! O *Plano Flexível* sai a partir de *R$ 35 por dia* 👍\n\n"
+    "E se preferir um contrato mais longo, o *Plano Anual* fica a partir de *R$ 29 por dia*."
 )
 
 RESP_ANUAL = (
-    "Isso mesmo! O *Plano Anual* sai por *R$ 29 por dia* 👍\n\n"
-    "É o nosso melhor valor — o *Plano Flexível*, sem prazo fixo, fica em *R$ 35 por dia*."
+    "Isso mesmo! O *Plano Anual* sai a partir de *R$ 29 por dia* 👍\n\n"
+    "É o nosso melhor valor — e também temos o *Plano Flexível* (sem prazo fixo) "
+    "a partir de *R$ 35 por dia*."
 )
 
 RESP_PRECO = (
-    "Temos dois planos 💰\n"
-    "🔹 *Anual* — R$ 29 por dia\n"
-    "🔹 *Flexível* — R$ 35 por dia\n\n"
-    "O valor final depende do *modelo* da moto."
+    "Temos dois planos pensados pra facilitar pra você 💰\n"
+    "🔹 *Plano Anual* — a partir de R$ 29 por dia\n"
+    "🔹 *Plano Flexível* — a partir de R$ 35 por dia\n\n"
+    "O valor final varia conforme o *modelo* da moto escolhida."
 )
 
 # --- Lista de espera (leads) e Restaurantes ---------------------------------
@@ -246,6 +267,45 @@ def _na_lista(telefone: str) -> bool:
     if not digitos:
         return False
     return any(_digitos_telefone(e.get("telefone", "")) == digitos for e in _ler_espera())
+
+
+def _nome_na_lista(telefone: str):
+    """Retorna o primeiro nome salvo na lista de espera para personalizar a saudação."""
+    digitos = _digitos_telefone(telefone)
+    if not digitos:
+        return None
+    for e in _ler_espera():
+        if _digitos_telefone(e.get("telefone", "")) == digitos:
+            nome = (e.get("nome") or "").strip()
+            if nome and nome != "—":
+                return nome.split()[0]
+    return None
+
+
+def _remover_telefone_arquivos(telefone: str):
+    """Remove o telefone das listas locais (usado apenas no comando #reset de testes)."""
+    digitos = _digitos_telefone(telefone)
+    if not digitos:
+        return
+    for caminho in (ARQUIVO_ESPERA, ARQUIVO_RESTAURANTES, ARQUIVO_SUPORTE):
+        if os.path.exists(caminho):
+            lista = _ler_json_lista(caminho)
+            filtrada = [e for e in lista if _digitos_telefone(e.get("telefone", "")) != digitos]
+            if len(filtrada) != len(lista):
+                with open(caminho, "w", encoding="utf-8") as f:
+                    json.dump(filtrada, f, ensure_ascii=False, indent=2)
+
+
+def _msg_ja_cadastrado(telefone: str) -> str:
+    primeiro = _nome_na_lista(telefone)
+    if primeiro:
+        return (
+            f"Que bom falar com você de novo, *{primeiro}*! 😊🏍️\n\n"
+            "Já conferi aqui e o seu lugar continua garantido na nossa *lista de espera* ✅ — "
+            "assim que a nova frota chegar, você será avisado em primeira mão!\n\n"
+            "Enquanto isso, tem alguma *dúvida* sobre planos, valores ou posso te ajudar com outra coisa?"
+        )
+    return JA_CADASTRADO
 
 
 def _adicionar_lista_espera(telefone, nome="", cidade="", bairro="", plano=None) -> bool:
@@ -364,6 +424,8 @@ PADROES_SUPORTE = (
 
 def _detectar_vertical(t: str):
     if any(p in t for p in PADROES_RESTAURANTE):
+        return "restaurante"
+    if re.search(r"\b(cadastr\w*|cadatr\w*)\b", t) and not any(p in t for p in PADROES_LOCADORA):
         return "restaurante"
     if any(p in t for p in PADROES_LOCADORA):
         return "locadora"
@@ -672,13 +734,13 @@ def _com_registro(resposta, sessao, telefone):
 def _saudacao_locadora(plano):
     """Saudação da locadora, reconhecendo o plano quando o site pré-preencheu."""
     if plano == "anual":
-        return (f"Olá! 👋 Seja bem-vindo à *{MARCA_LOCADORA}* 🏍️\n\n"
-                "Vi que é sobre o *Plano Anual* — R$ 29 por dia 👍\n"
-                "Pra começar, *como você se chama?*")
+        return (f"Olá! 👋 Que bom ter você na *{MARCA_LOCADORA}* 🏍️\n\n"
+                "Vi que você tem interesse no *Plano Anual* (a partir de R$ 29/dia) 👍\n"
+                "Pra eu te atender direitinho, *como você se chama?*")
     if plano == "flexivel":
-        return (f"Olá! 👋 Seja bem-vindo à *{MARCA_LOCADORA}* 🏍️\n\n"
-                "Vi que é sobre o *Plano Flexível* — R$ 35 por dia 👍\n"
-                "Pra começar, *como você se chama?*")
+        return (f"Olá! 👋 Que bom ter você na *{MARCA_LOCADORA}* 🏍️\n\n"
+                "Vi que você tem interesse no *Plano Flexível* (a partir de R$ 35/dia) 👍\n"
+                "Pra eu te atender direitinho, *como você se chama?*")
     return BOAS_VINDAS_LOCADORA
 
 
@@ -691,10 +753,11 @@ def responder(mensagem: str, telefone: str = None, nome: str = None) -> str:
         return ""
     t = _normalizar(mensagem)
 
-    # Comando utilitário para reiniciar a sessão durante testes no WhatsApp
+    # Comando utilitário para reiniciar sessão e listas durante testes no WhatsApp
     if t in ("#reset", "/reset"):
         clear_session(telefone)
-        return "🔄 Sessão reiniciada! Pode mandar uma nova mensagem para começar do zero."
+        _remover_telefone_arquivos(telefone)
+        return "🔄 Sessão e cadastro de teste reiniciados! Pode mandar uma nova mensagem para começar do zero."
 
     sessao = get_session(telefone) or {}
 
@@ -729,7 +792,7 @@ def responder(mensagem: str, telefone: str = None, nome: str = None) -> str:
             return BOAS_VINDAS
         if _na_lista(telefone):
             _atualizar(telefone, sessao, vertical="locadora", etapa="cadastrado")
-            return JA_CADASTRADO_OI
+            return _msg_ja_cadastrado(telefone)
         plano = _plano_citado(t)
         _atualizar(telefone, sessao, vertical="locadora", etapa="nome", plano=plano)
         return _saudacao_locadora(plano)
@@ -746,7 +809,7 @@ def responder(mensagem: str, telefone: str = None, nome: str = None) -> str:
         if vertical == "locadora":
             if _na_lista(telefone):
                 _atualizar(telefone, sessao, vertical="locadora", etapa="cadastrado")
-                return JA_CADASTRADO
+                return _msg_ja_cadastrado(telefone)
             _atualizar(telefone, sessao, vertical="locadora", etapa="nome",
                        plano=_plano_citado(t))
             return ESCOLHEU_LOCADORA
@@ -809,16 +872,20 @@ def responder(mensagem: str, telefone: str = None, nome: str = None) -> str:
     if sessao.get("etapa") in ("cadastrado", "recusou"):
         duvida = _responder_duvida(t)
         if duvida:
-            return duvida
+            return duvida + "\n\nSe tiver mais alguma dúvida, é só me chamar por aqui 😊"
         if sessao.get("etapa") == "recusou" and _quer_voltar(t):
             return _finalizar_lista(sessao, telefone)
         if sessao.get("etapa") == "recusou" and t in DESPEDIDAS:
             return ""
+        if sessao.get("etapa") == "cadastrado" and not sessao.get("avisado"):
+            if t in DESPEDIDAS or _intencao(t, mensagem) == "nao" or any(p in t for p in ("so isso", "tudo certo", "sem duvida", "nenhuma")):
+                _atualizar(telefone, sessao, avisado=True)
+                return DESPEDIDA_ACOLHEDORA
+            _atualizar(telefone, sessao, avisado=True)
+            return CHAMA_ATENDENTE
         if sessao.get("avisado"):
             return ""
         _atualizar(telefone, sessao, avisado=True)
-        if sessao.get("etapa") == "cadastrado":
-            return JA_CADASTRADO
         return CHAMA_ATENDENTE
 
     # 5. Dúvida no meio do fluxo da locadora: responde e retoma de onde parou.
@@ -889,11 +956,13 @@ def _finalizar_lista(sessao, telefone):
     saudacao = f"*{tratamento}*" if tratamento else "amigo"
     if not novo:
         return _com_registro(
-            f"Você já estava na lista, {saudacao} 😊\n\n"
-            "Pode ficar tranquilo: assim que a frota chegar, te aviso ✅",
+            f"Seu nome já estava garantido na lista, {saudacao}! 😊\n\n"
+            "Pode ficar tranquilo: assim que a frota chegar, você será avisado em primeira mão ✅\n\n"
+            "Enquanto isso, tem alguma *dúvida* sobre planos ou valores?",
             sessao, telefone)
     return _com_registro(
         f"Prontinho, {saudacao}! 🎉\n\n"
-        "Você está na nossa *lista de espera* ✅ Assim que a frota chegar, você é "
-        "avisado em primeira mão, com prioridade na escolha do modelo.",
+        "Seu nome já está garantido na nossa *lista de espera* ✅ Assim que a nova "
+        "frota chegar, você será avisado em primeira mão e terá prioridade na escolha do modelo.\n\n"
+        "Enquanto isso, ficou com alguma *dúvida* sobre planos ou valores?",
         sessao, telefone)
