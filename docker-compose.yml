@@ -96,7 +96,7 @@ services:
       - ZUPOO_RESPONDER_APENAS=${ZUPOO_RESPONDER_APENAS:-5511977556050@c.us}
       - ZUPOO_ACEITAR_SELFCHAT=${ZUPOO_ACEITAR_SELFCHAT:-true}
       - ZUPOO_WEBHOOK_PORT=8081
-      - ZUPOO_WEBHOOK_URL=${ZUPOO_WEBHOOK_URL:-https://webhook-hermes.movilo.com.br/webhook/waha}
+      - ZUPOO_WEBHOOK_URL=${ZUPOO_WEBHOOK_URL:-https://webhook.movilo.com.br/webhook/waha}
       - ZUPOO_PERSIST_DIR=/hermes-data/zupoo-locadora-agente
     volumes:
       - hermes-data:/hermes-data

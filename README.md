@@ -36,9 +36,9 @@ Ambiente completo e integrado com **Hermes Agent**, **OmniRoute** e **Hermes Web
    - `WAHA_SESSION=5511993751000`
    - `ZUPOO_RESPONDER_APENAS=5511977556050@c.us` (troque para `*` quando quiser liberar para todos os leads)
    - `ZUPOO_WEBHOOK_PORT=8081`
-   - `ZUPOO_WEBHOOK_URL=https://webhook-hermes.movilo.com.br/webhook/waha`
+   - `ZUPOO_WEBHOOK_URL=https://webhook.movilo.com.br/webhook/waha`
 5. No Easypanel, exponha a porta `8787` do serviço `hermes-webui` com o seu domínio público (ex: `hermes.seudominio.com`) para acessar o chat Web moderno.
-6. Exponha a porta `8081` do serviço `zupoo-agente` no domínio `webhook-hermes.movilo.com.br` para receber os webhooks do WAHA (`/webhook/waha` e `/health`).
+6. Exponha a porta `8081` do serviço `zupoo-agente` no domínio `webhook.movilo.com.br` para receber os webhooks do WAHA (`/webhook/waha` e `/health`).
 7. Se desejar acessar o painel do OmniRoute para cadastrar chaves de IA, exponha a porta `20128` (ex: `omniroute.seudominio.com`).
 
 > O serviço `zupoo-agente` inicia automaticamente junto com o stack (com subida automática quando a VPS reiniciar via `restart: unless-stopped`). Os dados (`lista_espera.json`, `sessions.json`) e logs ficam persistidos no volume `hermes-data` em `/home/hermes/.hermes/zupoo-locadora-agente/`.
