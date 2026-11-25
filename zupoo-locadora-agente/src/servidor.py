@@ -238,6 +238,8 @@ def _processar_lote(eventos):
     try:
         status, dados = waha_client.enviar_texto(remetente, resposta)
         print(f"[msg-lote] {len(textos)} mensagens -> {remetente}, Waha={status}", flush=True)
+        if status not in (200, 201):
+            print(f"[erro] detalhe Waha ({status}): {dados}", flush=True)
         if isinstance(dados, dict):
             chave_resp = dados.get("key") or {}
             _marcar_enviado(chave_resp.get("id") or dados.get("id"))
@@ -304,7 +306,14 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         evento = dados.get("event", "")
-        # Depuração: registra TODO payload recebido do Waha e salva o último
+        sessao_ev = dados.get("session") or ""
+        sessao_esperada = waha_client.session_name()
+        # Ignora silenciosamente eventos de outras sessões configuradas no mesmo WAHA
+        if sessao_esperada and sessao_ev and sessao_ev != sessao_esperada:
+            self._enviar_json(200, {"recebido": True, "ignorado": "outra_sessao"})
+            return
+
+        # Depuração: registra TODO payload recebido da sessão do agente e salva o último
         payload_bruto = dados.get("payload", {})
         print(
             f"[debug] evento={evento} session={dados.get('session')} "

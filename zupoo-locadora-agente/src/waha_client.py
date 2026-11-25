@@ -118,6 +118,9 @@ def resolver_lid(lid, sessao=None):
             resolvido = str(pn) + "@c.us"
             _LID_CACHE[lid] = resolvido
             return resolvido
+        print(f"[lid] Waha retornou 200 sem pn para {lid}: {dados}", flush=True)
+    else:
+        print(f"[lid] falha ao resolver {lid} via Waha (status={status}, sessao={sess}): {dados}", flush=True)
     return None
 
 
