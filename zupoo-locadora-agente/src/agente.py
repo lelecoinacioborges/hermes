@@ -377,10 +377,44 @@ def _eh_assunto_especifico_suporte(mensagem: str, t: str) -> bool:
     return len(limpo.split()) >= 2
 
 
+_RE_NOME_EMBUTIDO = re.compile(
+    r"(?:meu nome [eé]|me chamo|eu sou [oa]|sou [oa]|aqui [eé] [oa])\s+"
+    r"([A-Za-zÀ-ÿ]+(?:\s+[A-Za-zÀ-ÿ]+)?)",
+    re.I,
+)
+_STOP_NOME_EMBUTIDO = {
+    "e", "mas", "que", "quero", "qro", "estou", "to", "preciso", "tenho",
+    "gostaria", "vim", "de", "da", "do", "em", "na", "no", "para", "pra",
+    "com", "moto", "motoboy", "restaurante", "pizzaria", "boleto", "plano",
+}
+
+
+def _extrair_nome_embutido(mensagem: str):
+    """Extrai o nome quando o cliente se apresenta no meio de uma frase maior.
+
+    Ex.: 'Oi, sou o Carlos e quero alugar uma moto' -> 'Carlos'
+         'Me chamo Ana Paula, quero cadastrar'     -> 'Ana Paula'
+    """
+    m = _RE_NOME_EMBUTIDO.search(mensagem or "")
+    if not m:
+        return None
+    palavras = []
+    for p in m.group(1).split():
+        if _normalizar(p) in _STOP_NOME_EMBUTIDO:
+            break
+        palavras.append(p)
+    if not palavras:
+        return None
+    nome_limpo = " ".join(palavras).strip(".,!;:")
+    if not nome_limpo or re.search(r"\d", nome_limpo):
+        return None
+    return nome_limpo
+
+
 def _iniciar_suporte(telefone, sessao, mensagem_inicial="", t_inicial=""):
-    """Inicia fluxo de suporte: usa nome já conhecido ou pergunta o nome antes, preservando assunto inicial."""
+    """Inicia fluxo de suporte: usa nome conhecido/embutido ou pergunta o nome, preservando assunto."""
     assunto = mensagem_inicial.strip() if _eh_assunto_especifico_suporte(mensagem_inicial, t_inicial) else ""
-    nome_salvo = _nome_conhecido(telefone, sessao)
+    nome_salvo = _nome_conhecido(telefone, sessao) or _extrair_nome_embutido(mensagem_inicial)
     if nome_salvo:
         primeiro = nome_salvo.split()[0]
         sessao = _atualizar(
@@ -398,9 +432,9 @@ def _iniciar_suporte(telefone, sessao, mensagem_inicial="", t_inicial=""):
     return SUPORTE_PEDE_NOME
 
 
-def _iniciar_restaurante(telefone, sessao):
-    """Inicia fluxo de restaurante: aproveita nome já conhecido ou pergunta o nome."""
-    nome_salvo = _nome_conhecido(telefone, sessao)
+def _iniciar_restaurante(telefone, sessao, mensagem_inicial=""):
+    """Inicia fluxo de restaurante: aproveita nome conhecido/embutido ou pergunta o nome."""
+    nome_salvo = _nome_conhecido(telefone, sessao) or _extrair_nome_embutido(mensagem_inicial)
     if nome_salvo:
         sessao = _atualizar(telefone, sessao, vertical="restaurante", nome_usuario=nome_salvo, etapa="restaurante_cidade")
         primeiro = nome_salvo.split()[0]
@@ -413,12 +447,12 @@ def _iniciar_restaurante(telefone, sessao):
     return RESTAURANTE_ATENDENTE
 
 
-def _iniciar_locadora(telefone, sessao, plano=None, veio_do_menu=False):
-    """Inicia fluxo da locadora: reconhece se já está na lista ou se já sabemos o nome."""
+def _iniciar_locadora(telefone, sessao, plano=None, veio_do_menu=False, mensagem_inicial=""):
+    """Inicia fluxo da locadora: reconhece lista de espera ou nome conhecido/embutido."""
     if _na_lista(telefone):
         _atualizar(telefone, sessao, vertical="locadora", etapa="cadastrado")
         return _msg_ja_cadastrado(telefone)
-    nome_salvo = _nome_conhecido(telefone, sessao)
+    nome_salvo = _nome_conhecido(telefone, sessao) or _extrair_nome_embutido(mensagem_inicial)
     if nome_salvo:
         sessao = _atualizar(telefone, sessao, vertical="locadora", nome_usuario=nome_salvo, plano=plano, etapa="cidade")
         primeiro = nome_salvo.split()[0]
@@ -960,11 +994,11 @@ def responder(mensagem: str, telefone: str = None, nome: str = None) -> str:
     if troca == "restaurante":
         nome_ant = _nome_conhecido(telefone, sessao)
         sessao = {"nome_usuario": nome_ant} if nome_ant else {}
-        return _iniciar_restaurante(telefone, sessao)
+        return _iniciar_restaurante(telefone, sessao, mensagem)
     if troca == "locadora":
         nome_ant = _nome_conhecido(telefone, sessao)
         sessao = {"nome_usuario": nome_ant} if nome_ant else {}
-        return _iniciar_locadora(telefone, sessao, plano=_plano_citado(t))
+        return _iniciar_locadora(telefone, sessao, plano=_plano_citado(t), mensagem_inicial=mensagem)
 
     # 1. Primeiro contato: detecta vertical ou apresenta menu.
     #    A mensagem de entrada nunca vira nome — era ela que gravava
@@ -972,23 +1006,23 @@ def responder(mensagem: str, telefone: str = None, nome: str = None) -> str:
     if not sessao.get("etapa"):
         vertical = _detectar_vertical(t)
         if vertical == "restaurante":
-            return _iniciar_restaurante(telefone, sessao)
+            return _iniciar_restaurante(telefone, sessao, mensagem)
         if vertical == "suporte":
             return _iniciar_suporte(telefone, sessao, mensagem, t)
         if vertical is None:
             _atualizar(telefone, sessao, etapa="escolher")
             return BOAS_VINDAS
-        return _iniciar_locadora(telefone, sessao, plano=_plano_citado(t))
+        return _iniciar_locadora(telefone, sessao, plano=_plano_citado(t), mensagem_inicial=mensagem)
 
     # 2. Escolha de negócio pendente (aceita 1, 2, 3, emojis ou texto).
     if sessao.get("etapa") == "escolher":
         vertical = _detectar_escolha_menu(mensagem, t)
         if vertical == "restaurante":
-            return _iniciar_restaurante(telefone, sessao)
+            return _iniciar_restaurante(telefone, sessao, mensagem)
         if vertical == "suporte":
             return _iniciar_suporte(telefone, sessao, mensagem, t)
         if vertical == "locadora":
-            return _iniciar_locadora(telefone, sessao, plano=_plano_citado(t), veio_do_menu=True)
+            return _iniciar_locadora(telefone, sessao, plano=_plano_citado(t), veio_do_menu=True, mensagem_inicial=mensagem)
         return REDIRECIONA
 
     # 2b. Fluxo de dúvidas / suporte: coleta nome se não existir, responde dúvida ou encaminha.
