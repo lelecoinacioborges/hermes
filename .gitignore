@@ -9,6 +9,7 @@ zupoo-locadora-agente/logs/*
 zupoo-locadora-agente/data/sessions.json
 zupoo-locadora-agente/data/lista_espera.json
 zupoo-locadora-agente/data/restaurantes.json
+zupoo-locadora-agente/data/entregadores.json
 zupoo-locadora-agente/data/suporte.json
 
 # Variáveis locais sensíveis

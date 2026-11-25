@@ -246,6 +246,14 @@ def _notificar_admin(registro):
             f"📍 Local: {loc}\n"
             f"📱 Tel: {tel}"
         )
+    elif tipo == "entregador":
+        link = registro.get("link") or "https://zupoo.com.br/cadastro-entregador.html"
+        msg = (
+            "🔔 *Novo interesse — Entregador*\n"
+            f"👤 Nome: {nome}\n"
+            f"📱 Tel: {tel}\n"
+            f"🔗 Link enviado: {link}"
+        )
     else:
         assunto = registro.get("assunto") or "—"
         msg = (

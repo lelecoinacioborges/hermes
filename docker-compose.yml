@@ -98,6 +98,7 @@ services:
       - ZUPOO_WEBHOOK_PORT=8081
       - ZUPOO_WEBHOOK_URL=${ZUPOO_WEBHOOK_URL:-https://webhook.movilo.com.br/webhook/waha}
       - ZUPOO_ADMIN_CHAT=${ZUPOO_ADMIN_CHAT:-5511977556050@c.us}
+      - ZUPOO_LINK_ENTREGADOR=${ZUPOO_LINK_ENTREGADOR:-https://zupoo.com.br/cadastro-entregador.html}
       - ZUPOO_SILENCIO_HORAS=${ZUPOO_SILENCIO_HORAS:-6}
       - ZUPOO_HORARIO_INICIO=${ZUPOO_HORARIO_INICIO:-9}
       - ZUPOO_HORARIO_FIM=${ZUPOO_HORARIO_FIM:-18}

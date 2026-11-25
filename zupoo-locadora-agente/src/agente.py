@@ -77,9 +77,11 @@ PLANOS = _ler_md("planos.md")
 
 ARQUIVO_ESPERA = os.path.join(DATA, "lista_espera.json")
 ARQUIVO_RESTAURANTES = os.path.join(DATA, "restaurantes.json")
+ARQUIVO_ENTREGADORES = os.path.join(DATA, "entregadores.json")
 ARQUIVO_SUPORTE = os.path.join(DATA, "suporte.json")
+LINK_ENTREGADOR = os.environ.get("ZUPOO_LINK_ENTREGADOR", "https://zupoo.com.br/cadastro-entregador.html")
 SILENCIO_HORAS = float(os.environ.get("ZUPOO_SILENCIO_HORAS", "6"))
-ETAPAS_FINALIZADAS = ("cadastrado", "recusou", "restaurante_transferido", "suporte_transferido")
+ETAPAS_FINALIZADAS = ("cadastrado", "recusou", "restaurante_transferido", "entregador_enviado", "suporte_transferido")
 
 # Horário de atendimento humano (Brasília, UTC-3)
 FUSO_BRASILIA = datetime.timezone(datetime.timedelta(hours=-3))
@@ -104,7 +106,8 @@ def _faixa_horario() -> str:
 MENU = (
     "1️⃣ 🏍️ *Alugar uma moto*\n"
     "2️⃣ 🍽️ *Cadastrar meu restaurante*\n"
-    "3️⃣ 💬 *Dúvidas ou suporte*"
+    "3️⃣ 🛵 *Quero ser entregador*\n"
+    "4️⃣ 💬 *Dúvidas ou suporte*"
 )
 
 BOAS_VINDAS = (
@@ -114,8 +117,30 @@ BOAS_VINDAS = (
 
 REDIRECIONA = (
     "Desculpa, não consegui identificar qual opção você prefere 😊\n\n"
-    "Me responde só com *1*, *2* ou *3* pra eu te direcionar certinho:\n" + MENU
+    "Me responde só com *1*, *2*, *3* ou *4* pra eu te direcionar certinho:\n" + MENU
 )
+
+
+def _msg_entregador(primeiro_nome=None, agora=None) -> str:
+    saud = f"Que legal ter você com a gente, *{primeiro_nome}*! 🛵✨" if primeiro_nome else "Que legal ter você com a gente! 🛵✨"
+    if _em_horario_comercial(agora):
+        rodape = (
+            "Já registrei seu contato por aqui ✅ Se tiver qualquer dúvida durante o "
+            "cadastro, pode responder aqui mesmo que nossa equipe te ajuda!"
+        )
+    else:
+        rodape = (
+            f"Já registrei seu contato por aqui ✅ Nosso atendimento humano funciona das "
+            f"{_faixa_horario()} — se precisar de alguma ajuda, pode deixar sua mensagem "
+            "que responderemos por ordem de chegada assim que voltarmos!"
+        )
+    return (
+        f"{saud}\n\n"
+        f"Pra fazer parte dos entregadores da *{MARCA}*, é só preencher seu cadastro "
+        f"rapidinho pelo link abaixo:\n"
+        f"👉 {LINK_ENTREGADOR}\n\n"
+        f"{rodape}"
+    )
 
 SUPORTE_PEDE_NOME = (
     "Claro! 💬 Vai ser um prazer te ajudar.\n\n"
@@ -352,7 +377,7 @@ def _nome_conhecido(telefone: str, sessao=None):
     digitos = _digitos_telefone(telefone)
     if not digitos:
         return None
-    for caminho in (ARQUIVO_ESPERA, ARQUIVO_RESTAURANTES, ARQUIVO_SUPORTE):
+    for caminho in (ARQUIVO_ESPERA, ARQUIVO_RESTAURANTES, ARQUIVO_ENTREGADORES, ARQUIVO_SUPORTE):
         for e in _ler_json_lista(caminho):
             if _digitos_telefone(e.get("telefone", "")) == digitos:
                 n = (e.get("nome") or "").strip()
@@ -361,8 +386,41 @@ def _nome_conhecido(telefone: str, sessao=None):
     return None
 
 
+def _adicionar_entregador(telefone, nome="") -> bool:
+    """Grava o lead de entregador em data/entregadores.json."""
+    digitos = _digitos_telefone(telefone)
+    if not digitos:
+        return False
+    existentes = _ler_json_lista(ARQUIVO_ENTREGADORES)
+    if any(_digitos_telefone(e.get("telefone", "")) == digitos for e in existentes):
+        return False
+    _salvar_json_lista(ARQUIVO_ENTREGADORES, {
+        "nome": (nome or "").strip() or "—",
+        "telefone": digitos,
+        "chat_id": telefone,
+        "link_enviado": LINK_ENTREGADOR,
+        "data": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
+        "origem": "whatsapp_entregador",
+    })
+    return True
+
+
+def _iniciar_entregador(telefone, sessao, mensagem_inicial="", nome_perfil=""):
+    """Envia direto o link de cadastro de entregador, salva o contato e alerta o admin."""
+    nome_salvo = _nome_conhecido(telefone, sessao) or _extrair_nome_embutido(mensagem_inicial) or (nome_perfil or "").strip()
+    primeiro = nome_salvo.split()[0] if nome_salvo else None
+    sessao = _atualizar(
+        telefone, sessao, vertical="entregador",
+        nome_usuario=nome_salvo or sessao.get("nome_usuario"),
+        etapa="entregador_enviado", avisado=True,
+    )
+    novo_ent = _adicionar_entregador(telefone, nome=nome_salvo)
+    extra = {"novo_registro": True, "tipo_registro": "entregador", "link": LINK_ENTREGADOR} if novo_ent else None
+    return _com_registro(_msg_entregador(primeiro), sessao, telefone, extra=extra)
+
+
 _SUPORTE_GENERICO = {
-    "3", "op 3", "opcao 3", "a 3", "tres", "suporte", "suport",
+    "4", "op 4", "opcao 4", "a 4", "quatro", "suporte", "suport",
     "duvida", "duvidas", "duv", "duvid", "ajuda", "atendente",
     "atendete", "humano", "falar com atendente", "falar com humano",
     "fala c alguem", "falar c alguem",
@@ -489,7 +547,7 @@ def _remover_telefone_arquivos(telefone: str):
     digitos = _digitos_telefone(telefone)
     if not digitos:
         return
-    for caminho in (ARQUIVO_ESPERA, ARQUIVO_RESTAURANTES, ARQUIVO_SUPORTE):
+    for caminho in (ARQUIVO_ESPERA, ARQUIVO_RESTAURANTES, ARQUIVO_ENTREGADORES, ARQUIVO_SUPORTE):
         if os.path.exists(caminho):
             lista = _ler_json_lista(caminho)
             filtrada = [e for e in lista if _digitos_telefone(e.get("telefone", "")) != digitos]
@@ -617,11 +675,19 @@ def _sessao_expirada(sessao) -> bool:
 PADROES_TROCA_RESTAURANTE = (
     "restaurante", "lanchonete", "pizzaria", "hamburgueria", "padaria",
     "meu estabelecimento", "estabelecimento", "cadastrar meu", "quero cadastrar",
-    "ser parceiro", "sou parceiro", "lojista", "ifood",
+    "ser parceiro", "sou parceiro", "lojista", "ifood", "preciso de motoboy",
+    "preciso de entregador",
 )
 
 PADROES_RESTAURANTE = PADROES_TROCA_RESTAURANTE + (
-    "delivery", "entrega", "entregador", "motoboy", "frete", "coleta",
+    "delivery", "entrega", "frete", "coleta",
+)
+
+PADROES_ENTREGADOR = (
+    "quero ser entregador", "ser entregador", "sou entregador", "entregador",
+    "trabalhar como entregador", "trabalhar com entrega", "trabalhar com entregas",
+    "fazer entrega", "fazer entregas", "ser motoboy", "trabalhar de motoboy",
+    "quero trabalhar", "cadastro entregador", "cadastrar como entregador",
 )
 
 PADROES_LOCADORA = (
@@ -641,6 +707,10 @@ PADROES_SUPORTE = (
 
 
 def _detectar_vertical(t: str):
+    if any(p in t for p in PADROES_TROCA_RESTAURANTE):
+        return "restaurante"
+    if any(p in t for p in PADROES_ENTREGADOR):
+        return "entregador"
     if any(p in t for p in PADROES_RESTAURANTE):
         return "restaurante"
     if re.search(r"\b(cadastr\w*|cadatr\w*)\b", t) and not any(p in t for p in PADROES_LOCADORA):
@@ -657,14 +727,26 @@ def _detectar_troca_vertical(vertical_atual: str, t: str):
     if vertical_atual == "locadora":
         if any(p in t for p in PADROES_TROCA_RESTAURANTE):
             return "restaurante"
+        if any(p in t for p in ("quero ser entregador", "ser entregador", "cadastrar como entregador", "trabalhar como entregador")):
+            return "entregador"
         return None
     if vertical_atual == "restaurante":
+        if any(p in t for p in ("quero ser entregador", "ser entregador", "cadastrar como entregador")):
+            return "entregador"
         if any(p in t for p in PADROES_LOCADORA) and not any(p in t for p in PADROES_TROCA_RESTAURANTE):
+            return "locadora"
+        return None
+    if vertical_atual == "entregador":
+        if any(p in t for p in PADROES_TROCA_RESTAURANTE):
+            return "restaurante"
+        if any(p in t for p in ("quero alugar", "alugar uma moto", "alugar moto", "plano anual", "plano flexivel")):
             return "locadora"
         return None
     if vertical_atual == "suporte":
         if any(p in t for p in ("cadastrar meu", "quero cadastrar", "cadastrar restaurante")):
             return "restaurante"
+        if any(p in t for p in ("quero ser entregador", "ser entregador")):
+            return "entregador"
         if any(p in t for p in ("quero alugar", "alugar uma moto", "alugar moto")):
             return "locadora"
         return None
@@ -688,10 +770,14 @@ def _detectar_escolha_menu(mensagem: str, t: str):
         return "locadora"
     if re.match(r"^(?:a |o |op |opcao |numero |num |quero |quero a )?(2|dois)$", limpo):
         return "restaurante"
-    if re.match(r"^(?:a |o |op |opcao |numero |num |quero |quero a )?(3|tres)$", limpo):
+    if re.match(r"^(?:a |o |op |opcao |numero |num |quero |quero a )?(3|tres)$", limpo) or "🛵" in bruto:
+        return "entregador"
+    if re.match(r"^(?:a |o |op |opcao |numero |num |quero |quero a )?(4|quatro)$", limpo):
         return "suporte"
 
     # Radicais e erros comuns de digitação na escolha do menu
+    if re.search(r"\b(entreg\w*|trabalh\w*|motoboy)\b", limpo) and not any(p in limpo for p in PADROES_TROCA_RESTAURANTE):
+        return "entregador"
     if re.search(r"\b(cadastr\w*|cadatr\w*|rest\w*|lanch\w*|pizz\w*|hamburg\w*|padar\w*|loja|comercio|parceir\w*)\b", limpo):
         if not any(p in limpo for p in PADROES_LOCADORA):
             return "restaurante"
@@ -931,12 +1017,14 @@ def _resumo_admin() -> str:
     """Gera resumo rápido dos leads e chamados para o admin no WhatsApp."""
     espera = _ler_json_lista(ARQUIVO_ESPERA)
     rests = _ler_json_lista(ARQUIVO_RESTAURANTES)
+    ents = _ler_json_lista(ARQUIVO_ENTREGADORES)
     sups = _ler_json_lista(ARQUIVO_SUPORTE)
 
     linhas = [
         "📊 *Resumo Zupoo*",
         f"🏍️ Lista de espera: *{len(espera)}*",
         f"🍽️ Restaurantes: *{len(rests)}*",
+        f"🛵 Entregadores: *{len(ents)}*",
         f"💬 Suporte: *{len(sups)}*",
     ]
 
@@ -951,6 +1039,11 @@ def _resumo_admin() -> str:
         for r in rests[-3:]:
             loc = " - ".join(p for p in (r.get("cidade"), r.get("bairro")) if p) or "—"
             linhas.append(f"• {r.get('nome', '—')} ({loc}) — {r.get('telefone', '—')}")
+
+    if ents:
+        linhas.append("\n*Últimos entregadores:*")
+        for en in ents[-3:]:
+            linhas.append(f"• {en.get('nome', '—')} — {en.get('telefone', '—')}")
 
     if sups:
         linhas.append("\n*Últimos chamados de suporte:*")
@@ -1042,6 +1135,10 @@ def responder(mensagem: str, telefone: str = None, nome: str = None) -> str:
         nome_ant = _nome_conhecido(telefone, sessao)
         sessao = {"nome_usuario": nome_ant} if nome_ant else {}
         return _iniciar_restaurante(telefone, sessao, mensagem)
+    if troca == "entregador":
+        nome_ant = _nome_conhecido(telefone, sessao)
+        sessao = {"nome_usuario": nome_ant} if nome_ant else {}
+        return _iniciar_entregador(telefone, sessao, mensagem, nome_perfil=nome or "")
     if troca == "locadora":
         nome_ant = _nome_conhecido(telefone, sessao)
         sessao = {"nome_usuario": nome_ant} if nome_ant else {}
@@ -1054,6 +1151,8 @@ def responder(mensagem: str, telefone: str = None, nome: str = None) -> str:
         vertical = _detectar_vertical(t)
         if vertical == "restaurante":
             return _iniciar_restaurante(telefone, sessao, mensagem)
+        if vertical == "entregador":
+            return _iniciar_entregador(telefone, sessao, mensagem, nome_perfil=nome or "")
         if vertical == "suporte":
             return _iniciar_suporte(telefone, sessao, mensagem, t)
         if vertical is None:
@@ -1061,16 +1160,21 @@ def responder(mensagem: str, telefone: str = None, nome: str = None) -> str:
             return BOAS_VINDAS
         return _iniciar_locadora(telefone, sessao, plano=_plano_citado(t), mensagem_inicial=mensagem)
 
-    # 2. Escolha de negócio pendente (aceita 1, 2, 3, emojis ou texto).
+    # 2. Escolha de negócio pendente (aceita 1, 2, 3, 4, emojis ou texto).
     if sessao.get("etapa") == "escolher":
         vertical = _detectar_escolha_menu(mensagem, t)
         if vertical == "restaurante":
             return _iniciar_restaurante(telefone, sessao, mensagem)
+        if vertical == "entregador":
+            return _iniciar_entregador(telefone, sessao, mensagem, nome_perfil=nome or "")
         if vertical == "suporte":
             return _iniciar_suporte(telefone, sessao, mensagem, t)
         if vertical == "locadora":
             return _iniciar_locadora(telefone, sessao, plano=_plano_citado(t), veio_do_menu=True, mensagem_inicial=mensagem)
         return REDIRECIONA
+
+    if sessao.get("etapa") == "entregador_enviado":
+        return ""
 
     # 2b. Fluxo de dúvidas / suporte: coleta nome se não existir, responde dúvida ou encaminha.
     if sessao.get("etapa") == "suporte_nome":
