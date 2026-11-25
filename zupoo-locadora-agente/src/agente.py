@@ -392,16 +392,34 @@ def _detectar_troca_vertical(vertical_atual: str, t: str):
 
 
 def _detectar_escolha_menu(mensagem: str, t: str):
-    """Reconhece '1', '2', '3', emojis (🏍️/🍽️/💬), 'cadastrar' ou texto livre no menu inicial."""
-    limpo = (t or "").strip()
-    if limpo in ("1", "opcao 1", "opção 1", "um") or "🏍" in (mensagem or ""):
+    """Reconhece '1', '2', '3', variações ('1.', 'a 2', 'op 3'), emojis e escrita preguiçosa."""
+    bruto = mensagem or ""
+    if "🏍" in bruto:
         return "locadora"
-    if limpo in ("2", "opcao 2", "opção 2", "dois", "cadastrar", "cadastro") or "🍽" in (mensagem or ""):
+    if "🍽" in bruto:
         return "restaurante"
-    if limpo in ("3", "opcao 3", "opção 3", "tres") or "💬" in (mensagem or ""):
+    if "💬" in bruto:
         return "suporte"
-    if re.search(r"\b(cadastrar|cadastro)\b", limpo) and not any(p in limpo for p in PADROES_LOCADORA):
+
+    limpo = re.sub(r"[^\w\s]", " ", t or "").strip()
+    limpo = re.sub(r"\s+", " ", limpo)
+
+    if re.match(r"^(?:a |o |op |opcao |numero |num |n |quero |quero a )?(1|um)$", limpo):
+        return "locadora"
+    if re.match(r"^(?:a |o |op |opcao |numero |num |quero |quero a )?(2|dois)$", limpo):
         return "restaurante"
+    if re.match(r"^(?:a |o |op |opcao |numero |num |quero |quero a )?(3|tres)$", limpo):
+        return "suporte"
+
+    # Radicais e erros comuns de digitação na escolha do menu
+    if re.search(r"\b(cadastr\w*|cadatr\w*|rest\w*|lanch\w*|pizz\w*|hamburg\w*|padar\w*|loja|comercio|parceir\w*)\b", limpo):
+        if not any(p in limpo for p in PADROES_LOCADORA):
+            return "restaurante"
+    if re.search(r"\b(alug\w*|loca\w*|mot\w*|mto)\b", limpo):
+        return "locadora"
+    if re.search(r"\b(suport\w*|duv\w*|atend\w*|ajud\w*|human\w*)\b", limpo) or "fala c " in limpo or "falar c " in limpo:
+        return "suporte"
+
     return _detectar_vertical(t)
 
 
@@ -416,7 +434,7 @@ def _plano_citado(t: str):
 
 # --- Dúvidas (interrompem o fluxo e depois ele retoma) ----------------------
 
-RE_PRECO = re.compile(r"\b(preco|precos|quanto|valor|valores|custa|diaria|diarias)\b")
+RE_PRECO = re.compile(r"\b(preco|precos|quanto|qto|qnt|qnto|valor|valores|custa|diaria|diarias)\b")
 
 
 def _responder_duvida(t: str):
@@ -429,7 +447,8 @@ def _responder_duvida(t: str):
         return RESP_ATENDENTE
 
     if any(p in t for p in ("quando chega", "quando vai chegar", "quando tem", "que dia",
-                            "qual data", "prazo", "previsao", "quando exatamente")):
+                            "qual data", "prazo", "previsao", "quando exatamente",
+                            "qnd chega", "qndo chega", "qnd vai", "qnd tem")):
         return RESP_PRAZO
 
     if any(p in t for p in ("reservar", "reserva", "garantir", "separar uma", "guardar uma")):
@@ -470,24 +489,32 @@ def _responder_duvida_restaurante(t: str):
 # "obrigado" fica de fora do RE_NAO: sozinho ele é ambíguo e transformaria
 # "sim, obrigado" em recusa. A forma negativa já está em FRASES_NAO.
 
-RE_SIM = re.compile(r"\b(sim|claro|quero|aceito|aceita|pode|bora|ok|isso|positivo|manda|vamos|s)\b")
-RE_NAO = re.compile(r"\b(nao|nem|dispenso)\b")
+RE_SIM = re.compile(r"\b(si+m+|s+|claro|quero|qro|aceito|aceita|pode|pd|pdc|bora|ok+|isso|positivo|manda|vamos|topo|fechou)\b")
+RE_NAO = re.compile(r"\b(na+o+|n+|nem|dispenso|negativo)\b")
 
-FRASES_INDECISO = ("nao sei", "ainda nao sei", "nao tenho certeza", "vou pensar", "talvez")
+FRASES_INDECISO = (
+    "nao sei", "n sei", "nn sei", "ainda nao sei", "nao tenho certeza",
+    "vou pensar", "talvez", "sei la", "sl", "sla",
+)
 FRASES_SIM = ("pode colocar", "pode me colocar", "pode por", "entrar na lista",
-              "quero entrar", "me adiciona", "coloca eu", "quero sim", "pode sim")
-FRASES_NAO = ("nao quero", "nao obrigado", "sem interesse", "agora nao",
-              "nao precisa", "ja tenho", "deixa pra la", "outra hora")
+              "quero entrar", "me adiciona", "coloca eu", "quero sim", "pode sim", "manda ver")
+FRASES_NAO = ("nao quero", "n quero", "nn quero", "nao obrigado", "nao obg", "n obg",
+              "sem interesse", "agora nao", "agora n", "hj n", "hoje nao",
+              "nao precisa", "n precisa", "ja tenho", "deixa pra la", "outra hora")
 
 DESPEDIDAS = {
-    "ok", "okk", "blz", "beleza", "obrigado", "obrigada", "valeu", "vlw",
+    "ok", "okk", "blz", "beleza", "obrigado", "obrigada", "obg", "valeu", "vlw",
     "tchau", "ate", "ate mais", "flw", "ta bom", "certo", "combinado",
     "show", "tranquilo", "de boa",
 }
 
 
-def _intencao(t: str):
-    """'sim', 'nao' ou None."""
+def _intencao(t: str, mensagem: str = ""):
+    """'sim', 'nao' ou None. Aceita abreviações ('ss', 'nn', 'qro', 'pd') e emojis."""
+    if "👎" in (mensagem or "") or "👎" in (t or ""):
+        return "nao"
+    if "👍" in (mensagem or "") or "👍" in (t or ""):
+        return "sim"
     if any(f in t for f in FRASES_INDECISO):
         return None
     if any(f in t for f in FRASES_NAO):
@@ -830,7 +857,7 @@ def responder(mensagem: str, telefone: str = None, nome: str = None) -> str:
         return _com_registro(AVISO_SEM_MOTO + "\n\n" + PERGUNTA_LISTA, sessao, telefone)
 
     if etapa == "lista":
-        intencao = _intencao(t)
+        intencao = _intencao(t, mensagem)
         if intencao == "sim":
             return _finalizar_lista(sessao, telefone)
         if intencao == "nao":
