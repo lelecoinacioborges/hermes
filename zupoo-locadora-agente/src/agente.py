@@ -606,7 +606,7 @@ def _responder_duvida_restaurante(t: str):
     """Resposta para dúvidas comuns durante o cadastro de restaurante."""
     if any(p in t for p in ("taxa", "adesao", "comissao", "mensalidade", "custo",
                             "quanto cobra", "quanto custa", "valor da entrega",
-                            "valor entrega", "gratis", "gratuito", "pago", "pagar")):
+                            "valor entrega", "gratis", "gratuito")):
         return RESP_DUVIDA_RESTAURANTE
     return None
 
@@ -893,12 +893,19 @@ def responder(mensagem: str, telefone: str = None, nome: str = None) -> str:
     if sessao.get("etapa") == "suporte_assunto":
         if t in SAUDACOES:
             return "Pode mandar sua dúvida por aqui 😊 Como posso te ajudar?"
-        duvida_loc = _responder_duvida(t)
-        if duvida_loc:
-            return duvida_loc + "\n\nSe precisar de mais alguma coisa ou quiser falar com um atendente, é só me escrever aqui 😊"
-        duvida_rest = _responder_duvida_restaurante(t)
-        if duvida_rest:
-            return duvida_rest + "\n\nSe precisar falar com um atendente, é só me escrever aqui 😊"
+        eh_problema_ou_humano = any(p in t for p in (
+            "erro", "problema", "boleto", "fatura", "pix", "pagamento", "pagar",
+            "nao consigo", "falha", "travou", "bug", "atendente", "humano",
+            "reclamacao", "sinistro", "manutencao", "multa",
+        ))
+        if not eh_problema_ou_humano:
+            duvida_loc = _responder_duvida(t)
+            if duvida_loc:
+                return duvida_loc + "\n\nSe precisar de mais alguma coisa ou quiser falar com um atendente, é só me escrever aqui 😊"
+            if any(p in t for p in ("restaurante", "estabelecimento", "cadastro", "adesao", "comissao")):
+                duvida_rest = _responder_duvida_restaurante(t)
+                if duvida_rest:
+                    return duvida_rest + "\n\nSe precisar falar com um atendente, é só me escrever aqui 😊"
         sessao = _atualizar(telefone, sessao, nome_usuario=nome or sessao.get("nome_usuario"), etapa="suporte_transferido", avisado=True)
         _adicionar_suporte(telefone, mensagem, nome=nome or "")
         return _com_registro(_msg_suporte_transferido(), sessao, telefone)
