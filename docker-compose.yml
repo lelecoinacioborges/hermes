@@ -26,16 +26,13 @@ services:
     depends_on:
       - redis
 
-  # ── Hermes Agent (Agente Autônomo + Webhook Zupoo Locadora) ───────────────
+  # ── Hermes Agent (Agente Autônomo com Web UI & Gateway) ───────────────────
   hermes:
-    build:
-      context: .
-      dockerfile: Dockerfile.hermes
+    image: nousresearch/hermes-agent:latest
+    pull_policy: always
     restart: unless-stopped
     stdin_open: true
     tty: true
-    ports:
-      - "${ZUPOO_WEBHOOK_PORT:-8081}:8081"
     environment:
       - HERMES_HOME=/home/hermes/.hermes
       - HERMES_UID=1000
@@ -51,17 +48,9 @@ services:
       - HERMES_DASHBOARD_PORT=9119
       - HERMES_DASHBOARD_BASIC_AUTH_USERNAME=admin
       - HERMES_DASHBOARD_BASIC_AUTH_PASSWORD=admin
-      # Integração Zupoo Locadora (Agente de Atendimento via WAHA)
-      - WAHA_URL=${WAHA_URL:-https://infra-waha.gvlvvh.easypanel.host}
-      - WAHA_API_KEY=${WAHA_API_KEY:-}
-      - WAHA_SESSION=${WAHA_SESSION:-5511993751000}
-      - ZUPOO_RESPONDER_APENAS=${ZUPOO_RESPONDER_APENAS:-5511977556050@c.us}
-      - ZUPOO_ACEITAR_SELFCHAT=${ZUPOO_ACEITAR_SELFCHAT:-true}
-      - ZUPOO_WEBHOOK_PORT=8081
-      - ZUPOO_WEBHOOK_URL=${ZUPOO_WEBHOOK_URL:-https://webhook-hermes.movilo.com.br/webhook/waha}
     volumes:
       - hermes-data:/home/hermes/.hermes
-      - hermes-agent-src-v2:/opt/hermes
+      - hermes-agent-src-v3:/opt/hermes
     depends_on:
       - omniroute
 
@@ -87,14 +76,34 @@ services:
       - WANTED_GID=1000
     volumes:
       - hermes-data:/home/hermeswebui/.hermes
-      - hermes-agent-src-v2:/home/hermeswebui/.hermes/hermes-agent:ro
+      - hermes-agent-src-v3:/home/hermeswebui/.hermes/hermes-agent:ro
       - hermes-workspace:/workspace
     depends_on:
       - hermes
+
+  # ── Zupoo Locadora (Agente de Atendimento WhatsApp via WAHA) ──────────────
+  zupoo-agente:
+    build:
+      context: ./zupoo-locadora-agente
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${ZUPOO_WEBHOOK_PORT:-8081}:8081"
+    environment:
+      - WAHA_URL=${WAHA_URL:-https://infra-waha.gvlvvh.easypanel.host}
+      - WAHA_API_KEY=${WAHA_API_KEY:-}
+      - WAHA_SESSION=${WAHA_SESSION:-5511993751000}
+      - ZUPOO_RESPONDER_APENAS=${ZUPOO_RESPONDER_APENAS:-5511977556050@c.us}
+      - ZUPOO_ACEITAR_SELFCHAT=${ZUPOO_ACEITAR_SELFCHAT:-true}
+      - ZUPOO_WEBHOOK_PORT=8081
+      - ZUPOO_WEBHOOK_URL=${ZUPOO_WEBHOOK_URL:-https://webhook-hermes.movilo.com.br/webhook/waha}
+      - ZUPOO_PERSIST_DIR=/hermes-data/zupoo-locadora-agente
+    volumes:
+      - hermes-data:/hermes-data
 
 volumes:
   redis-data:
   omniroute-data:
   hermes-data:
   hermes-workspace:
-  hermes-agent-src-v2:
+  hermes-agent-src-v3:
