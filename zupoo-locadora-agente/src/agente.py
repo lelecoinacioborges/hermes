@@ -117,6 +117,11 @@ REDIRECIONA = (
     "Me responde só com *1*, *2* ou *3* pra eu te direcionar certinho:\n" + MENU
 )
 
+SUPORTE_PEDE_NOME = (
+    "Claro! 💬 Vai ser um prazer te ajudar.\n\n"
+    "Antes de tudo, *como você se chama?*"
+)
+
 SUPORTE_INICIO = (
     "Claro! 💬 Vai ser um prazer te ajudar.\n\n"
     "Pode me contar qual é a sua *dúvida* ou o que você precisa — se eu não "
@@ -128,11 +133,25 @@ SUPORTE_TRANSFERIDO = (
     "Um atendente humano vai continuar o atendimento com você por aqui em instantes. 💬😊"
 )
 
-def _msg_suporte_transferido(agora=None) -> str:
+def _msg_suporte_inicio(primeiro_nome=None) -> str:
+    if primeiro_nome:
+        return (
+            f"Claro, *{primeiro_nome}*! 💬 Vai ser um prazer te ajudar.\n\n"
+            "Pode me contar qual é a sua *dúvida* ou o que você precisa — se eu não "
+            "conseguir responder na hora, já deixo encaminhado para a nossa equipe!"
+        )
+    return SUPORTE_INICIO
+
+
+def _msg_suporte_transferido(primeiro_nome=None, agora=None) -> str:
+    prefixo = f"Anotado, *{primeiro_nome}*! ✅" if primeiro_nome else "Anotado! ✅"
     if _em_horario_comercial(agora):
-        return SUPORTE_TRANSFERIDO
+        return (
+            f"{prefixo} Já encaminhei a sua mensagem para a nossa equipe de suporte.\n\n"
+            "Um atendente humano vai continuar o atendimento com você por aqui em instantes. 💬😊"
+        )
     return (
-        "Anotado! ✅ Já registrei sua mensagem para a nossa equipe de suporte.\n\n"
+        f"{prefixo} Já registrei sua mensagem para a nossa equipe de suporte.\n\n"
         f"Nosso atendimento humano funciona das {_faixa_horario()} — sua mensagem já ficou "
         "na nossa fila e será respondida por ordem de chegada assim que voltarmos! 💬😊"
     )
@@ -149,11 +168,17 @@ def _msg_chama_atendente(agora=None) -> str:
     )
 
 
-def _msg_restaurante_em_analise(agora=None) -> str:
+def _msg_restaurante_em_analise(primeiro_nome=None, agora=None) -> str:
+    prefixo = f"Perfeito, *{primeiro_nome}*! ✅" if primeiro_nome else "Perfeito! ✅"
     if _em_horario_comercial(agora):
-        return RESTAURANTE_BAIRRO_EM_ANALISE
+        return (
+            f"{prefixo} Já anotei todos os dados do seu restaurante.\n\n"
+            f"Estamos expandindo a *{MARCA}* bairro a bairro — vou verificar a cobertura "
+            "da sua região e um de nossos atendentes entrará em contato por aqui para "
+            "dar sequência ao cadastro. Obrigado pelo interesse! 🍽️😊"
+        )
     return (
-        "Perfeito! ✅ Já anotei todos os dados do seu restaurante.\n\n"
+        f"{prefixo} Já anotei todos os dados do seu restaurante.\n\n"
         f"Nosso atendimento humano funciona das {_faixa_horario()}. Assim que o expediente "
         f"começar, nossa equipe vai verificar a cobertura da *{MARCA}* no seu bairro e "
         "entrar em contato por ordem de chegada para dar sequência ao cadastro! 🍽️😊"
@@ -318,6 +343,32 @@ def _na_lista(telefone: str) -> bool:
     if not digitos:
         return False
     return any(_digitos_telefone(e.get("telefone", "")) == digitos for e in _ler_espera())
+
+
+def _nome_conhecido(telefone: str, sessao=None):
+    """Busca o nome salvo na sessão ou em qualquer registro anterior (lista, restaurante, suporte)."""
+    if sessao and sessao.get("nome_usuario"):
+        return sessao["nome_usuario"].strip()
+    digitos = _digitos_telefone(telefone)
+    if not digitos:
+        return None
+    for caminho in (ARQUIVO_ESPERA, ARQUIVO_RESTAURANTES, ARQUIVO_SUPORTE):
+        for e in _ler_json_lista(caminho):
+            if _digitos_telefone(e.get("telefone", "")) == digitos:
+                n = (e.get("nome") or "").strip()
+                if n and n != "—":
+                    return n
+    return None
+
+
+def _iniciar_suporte(telefone, sessao):
+    """Inicia fluxo de suporte: usa nome já conhecido ou pergunta o nome antes."""
+    nome_salvo = _nome_conhecido(telefone, sessao)
+    if nome_salvo:
+        sessao = _atualizar(telefone, sessao, vertical="suporte", nome_usuario=nome_salvo, etapa="suporte_assunto")
+        return _msg_suporte_inicio(nome_salvo.split()[0])
+    _atualizar(telefone, sessao, vertical="suporte", etapa="suporte_nome")
+    return SUPORTE_PEDE_NOME
 
 
 def _nome_na_lista(telefone: str):
@@ -859,8 +910,7 @@ def responder(mensagem: str, telefone: str = None, nome: str = None) -> str:
             _atualizar(telefone, sessao, vertical="restaurante", etapa="restaurante")
             return RESTAURANTE_ATENDENTE
         if vertical == "suporte":
-            _atualizar(telefone, sessao, vertical="suporte", etapa="suporte_assunto")
-            return SUPORTE_INICIO
+            return _iniciar_suporte(telefone, sessao)
         if vertical is None:
             _atualizar(telefone, sessao, etapa="escolher")
             return BOAS_VINDAS
@@ -878,8 +928,7 @@ def responder(mensagem: str, telefone: str = None, nome: str = None) -> str:
             _atualizar(telefone, sessao, vertical="restaurante", etapa="restaurante")
             return RESTAURANTE_ATENDENTE
         if vertical == "suporte":
-            _atualizar(telefone, sessao, vertical="suporte", etapa="suporte_assunto")
-            return SUPORTE_INICIO
+            return _iniciar_suporte(telefone, sessao)
         if vertical == "locadora":
             if _na_lista(telefone):
                 _atualizar(telefone, sessao, vertical="locadora", etapa="cadastrado")
@@ -889,7 +938,18 @@ def responder(mensagem: str, telefone: str = None, nome: str = None) -> str:
             return ESCOLHEU_LOCADORA
         return REDIRECIONA
 
-    # 2b. Fluxo de dúvidas / suporte: tenta responder dúvida conhecida ou encaminha ao humano.
+    # 2b. Fluxo de dúvidas / suporte: coleta nome se não existir, responde dúvida ou encaminha.
+    if sessao.get("etapa") == "suporte_nome":
+        nome_usuario = _extrair_nome(mensagem, t)
+        if not nome_usuario:
+            return NOME_NAO_ENTENDIDO
+        sessao = _atualizar(telefone, sessao, nome_usuario=nome_usuario, etapa="suporte_assunto")
+        return _com_registro(
+            f"Prazer em te conhecer, *{_primeiro_nome(sessao)}*! 😊\n\n"
+            "Pode me contar qual é a sua *dúvida* ou o que você precisa — se eu não "
+            "conseguir responder na hora, já deixo encaminhado para a nossa equipe!",
+            sessao, telefone)
+
     if sessao.get("etapa") == "suporte_assunto":
         if t in SAUDACOES:
             return "Pode mandar sua dúvida por aqui 😊 Como posso te ajudar?"
@@ -906,9 +966,10 @@ def responder(mensagem: str, telefone: str = None, nome: str = None) -> str:
                 duvida_rest = _responder_duvida_restaurante(t)
                 if duvida_rest:
                     return duvida_rest + "\n\nSe precisar falar com um atendente, é só me escrever aqui 😊"
-        sessao = _atualizar(telefone, sessao, nome_usuario=nome or sessao.get("nome_usuario"), etapa="suporte_transferido", avisado=True)
-        _adicionar_suporte(telefone, mensagem, nome=nome or "")
-        return _com_registro(_msg_suporte_transferido(), sessao, telefone)
+        nome_final = sessao.get("nome_usuario") or _nome_conhecido(telefone, sessao) or nome or ""
+        sessao = _atualizar(telefone, sessao, nome_usuario=nome_final, etapa="suporte_transferido", avisado=True)
+        _adicionar_suporte(telefone, mensagem, nome=nome_final)
+        return _com_registro(_msg_suporte_transferido(_primeiro_nome(sessao)), sessao, telefone)
 
     if sessao.get("etapa") == "suporte_transferido":
         return ""
@@ -934,7 +995,7 @@ def responder(mensagem: str, telefone: str = None, nome: str = None) -> str:
             if bairro:
                 sessao = _atualizar(telefone, sessao, cidade=cidade, bairro=bairro, etapa="restaurante_transferido", avisado=True)
                 _adicionar_restaurante(telefone, sessao.get("nome_usuario", ""), cidade, bairro)
-                return _com_registro(_msg_restaurante_em_analise(), sessao, telefone)
+                return _com_registro(_msg_restaurante_em_analise(_primeiro_nome(sessao)), sessao, telefone)
             sessao = _atualizar(telefone, sessao, cidade=cidade, etapa="restaurante_bairro")
             return _com_registro(RESTAURANTE_PEDE_BAIRRO, sessao, telefone)
         local = _extrair_local(mensagem, t)
@@ -942,7 +1003,7 @@ def responder(mensagem: str, telefone: str = None, nome: str = None) -> str:
             return _com_registro("Não peguei 😅 Em qual *bairro* fica o seu restaurante?", sessao, telefone)
         sessao = _atualizar(telefone, sessao, bairro=local, etapa="restaurante_transferido", avisado=True)
         _adicionar_restaurante(telefone, sessao.get("nome_usuario", ""), sessao.get("cidade", ""), local)
-        return _com_registro(_msg_restaurante_em_analise(), sessao, telefone)
+        return _com_registro(_msg_restaurante_em_analise(_primeiro_nome(sessao)), sessao, telefone)
 
     if sessao.get("etapa") == "restaurante_transferido":
         return ""
