@@ -484,7 +484,20 @@ def responder(mensagem: str, telefone: str = None, nome: str = None) -> str:
     t = _normalizar(mensagem)
     sessao = get_session(telefone) or {}
 
-    # 1. Primeira mensagem: roteia entre os dois negócios e só então pede o
+    # Se o cliente mudar explicitamente de assunto, troca de fluxo sem manter
+    # cidade/bairro/plano do atendimento anterior. Isso é importante quando o
+    # mesmo número primeiro pergunta sobre motos e depois quer cadastrar um
+    # restaurante.
+    vertical_detectada = _detectar_vertical(t)
+    if sessao.get("vertical") == "locadora" and vertical_detectada == "restaurante":
+        sessao = {}
+        _atualizar(telefone, sessao, vertical="restaurante", etapa="restaurante")
+        return RESTAURANTE_ATENDENTE
+    if sessao.get("vertical") == "restaurante" and vertical_detectada == "locadora":
+        sessao = {}
+        _atualizar(telefone, sessao, vertical="locadora", etapa="nome", plano=_plano_citado(t))
+        return _saudacao_locadora(_plano_citado(t))
+
     #    nome. A mensagem de entrada nunca vira nome — era ela que gravava
     #    todo lead vindo do site como "Quero".
     if not sessao.get("etapa"):
@@ -531,7 +544,13 @@ def responder(mensagem: str, telefone: str = None, nome: str = None) -> str:
             local = _extrair_local(mensagem, t)
             if not local:
                 return "Não peguei 😅 De qual *cidade* é o seu restaurante?"
-            _atualizar(telefone, sessao, cidade=local, etapa="restaurante_bairro")
+            partes = [p.strip() for p in local.split(",")]
+            cidade = partes[0]
+            bairro = partes[1] if len(partes) >= 2 else ""
+            if bairro:
+                _atualizar(telefone, sessao, cidade=cidade, bairro=bairro, etapa="restaurante_transferido", avisado=True)
+                return RESTAURANTE_BAIRRO_EM_ANALISE
+            _atualizar(telefone, sessao, cidade=cidade, etapa="restaurante_bairro")
             return RESTAURANTE_PEDE_BAIRRO
         local = _extrair_local(mensagem, t)
         if not local:
