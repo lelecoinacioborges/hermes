@@ -45,5 +45,21 @@ fi
     done
 ) &
 
+# Garante que o entrypoint oficial do Hermes exista mesmo se um volume antigo montar sobre /opt/hermes
+if [ ! -x /opt/hermes/docker/entrypoint-dispatch.sh ] && [ -d /usr/local/lib/hermes-docker ]; then
+    mkdir -p /opt/hermes/docker
+    cp -a /usr/local/lib/hermes-docker/. /opt/hermes/docker/
+    chmod +x /opt/hermes/docker/*.sh 2>/dev/null || true
+fi
+
 # Delega a execução principal para o entrypoint oficial do Hermes
-exec /opt/hermes/docker/entrypoint-dispatch.sh "$@"
+if [ -x /opt/hermes/docker/entrypoint-dispatch.sh ]; then
+    exec /opt/hermes/docker/entrypoint-dispatch.sh "$@"
+elif [ -x /usr/local/lib/hermes-docker/entrypoint-dispatch.sh ]; then
+    exec /usr/local/lib/hermes-docker/entrypoint-dispatch.sh "$@"
+elif [ -x /opt/hermes/docker/entrypoint.sh ]; then
+    exec /opt/hermes/docker/entrypoint.sh "$@"
+else
+    echo "[zupoo-agente] Aviso: entrypoint oficial do Hermes não encontrado; mantendo servidor webhook ativo."
+    wait
+fi
