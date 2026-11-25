@@ -238,9 +238,12 @@ def _processar_lote(eventos):
     if not relevante:
         return
     remetente = _resolver_remetente(combinado)
+    entrada_txt = combinado["payload"]["body"].replace("\n", " | ")
+    saida_txt = resposta.replace("\n", " | ")
     try:
         status, dados = waha_client.enviar_texto(remetente, resposta)
-        print(f"[msg-lote] {len(textos)} mensagens -> {remetente}, Waha={status}", flush=True)
+        print(f"[conversa] IN  ({remetente}): {entrada_txt}", flush=True)
+        print(f"[conversa] OUT ({remetente}) [Waha={status}]: {saida_txt}", flush=True)
         if status not in (200, 201):
             print(f"[erro] detalhe Waha ({status}): {dados}", flush=True)
         if isinstance(dados, dict):
