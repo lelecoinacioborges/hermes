@@ -349,11 +349,13 @@ def _detectar_troca_vertical(vertical_atual: str, t: str):
 
 
 def _detectar_escolha_menu(mensagem: str, t: str):
-    """Reconhece '1', '2', emojis (🏍️/🍽️) ou texto livre no menu inicial."""
+    """Reconhece '1', '2', emojis (🏍️/🍽️), 'cadastrar' ou texto livre no menu inicial."""
     limpo = (t or "").strip()
     if limpo in ("1", "opcao 1", "opção 1", "um") or "🏍" in (mensagem or ""):
         return "locadora"
-    if limpo in ("2", "opcao 2", "opção 2", "dois") or "🍽" in (mensagem or ""):
+    if limpo in ("2", "opcao 2", "opção 2", "dois", "cadastrar", "cadastro") or "🍽" in (mensagem or ""):
+        return "restaurante"
+    if re.search(r"\b(cadastrar|cadastro)\b", limpo) and not any(p in limpo for p in PADROES_LOCADORA):
         return "restaurante"
     return _detectar_vertical(t)
 
