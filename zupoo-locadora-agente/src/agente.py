@@ -361,13 +361,40 @@ def _nome_conhecido(telefone: str, sessao=None):
     return None
 
 
-def _iniciar_suporte(telefone, sessao):
-    """Inicia fluxo de suporte: usa nome já conhecido ou pergunta o nome antes."""
+_SUPORTE_GENERICO = {
+    "3", "op 3", "opcao 3", "a 3", "tres", "suporte", "suport",
+    "duvida", "duvidas", "duv", "duvid", "ajuda", "atendente",
+    "atendete", "humano", "falar com atendente", "falar com humano",
+    "fala c alguem", "falar c alguem",
+}
+
+
+def _eh_assunto_especifico_suporte(mensagem: str, t: str) -> bool:
+    limpo = re.sub(r"[^\w\s]", " ", t or "").strip()
+    limpo = re.sub(r"\s+", " ", limpo)
+    if not limpo or limpo in _SUPORTE_GENERICO:
+        return False
+    return len(limpo.split()) >= 2
+
+
+def _iniciar_suporte(telefone, sessao, mensagem_inicial="", t_inicial=""):
+    """Inicia fluxo de suporte: usa nome já conhecido ou pergunta o nome antes, preservando assunto inicial."""
+    assunto = mensagem_inicial.strip() if _eh_assunto_especifico_suporte(mensagem_inicial, t_inicial) else ""
     nome_salvo = _nome_conhecido(telefone, sessao)
     if nome_salvo:
-        sessao = _atualizar(telefone, sessao, vertical="suporte", nome_usuario=nome_salvo, etapa="suporte_assunto")
-        return _msg_suporte_inicio(nome_salvo.split()[0])
-    _atualizar(telefone, sessao, vertical="suporte", etapa="suporte_nome")
+        primeiro = nome_salvo.split()[0]
+        sessao = _atualizar(
+            telefone, sessao, vertical="suporte", nome_usuario=nome_salvo,
+            assunto_inicial=assunto, etapa="suporte_assunto",
+        )
+        if assunto:
+            return (
+                f"Claro, *{primeiro}*! 💬\n\n"
+                f"Sobre *\"{assunto}\"*, pode me passar mais detalhes para eu já deixar "
+                "tudo certinho pra nossa equipe?"
+            )
+        return _msg_suporte_inicio(primeiro)
+    _atualizar(telefone, sessao, vertical="suporte", assunto_inicial=assunto, etapa="suporte_nome")
     return SUPORTE_PEDE_NOME
 
 
@@ -947,7 +974,7 @@ def responder(mensagem: str, telefone: str = None, nome: str = None) -> str:
         if vertical == "restaurante":
             return _iniciar_restaurante(telefone, sessao)
         if vertical == "suporte":
-            return _iniciar_suporte(telefone, sessao)
+            return _iniciar_suporte(telefone, sessao, mensagem, t)
         if vertical is None:
             _atualizar(telefone, sessao, etapa="escolher")
             return BOAS_VINDAS
@@ -959,7 +986,7 @@ def responder(mensagem: str, telefone: str = None, nome: str = None) -> str:
         if vertical == "restaurante":
             return _iniciar_restaurante(telefone, sessao)
         if vertical == "suporte":
-            return _iniciar_suporte(telefone, sessao)
+            return _iniciar_suporte(telefone, sessao, mensagem, t)
         if vertical == "locadora":
             return _iniciar_locadora(telefone, sessao, plano=_plano_citado(t), veio_do_menu=True)
         return REDIRECIONA
@@ -969,7 +996,14 @@ def responder(mensagem: str, telefone: str = None, nome: str = None) -> str:
         nome_usuario = _extrair_nome(mensagem, t)
         if not nome_usuario:
             return NOME_NAO_ENTENDIDO
+        assunto_ini = (sessao.get("assunto_inicial") or "").strip()
         sessao = _atualizar(telefone, sessao, nome_usuario=nome_usuario, etapa="suporte_assunto")
+        if assunto_ini:
+            return _com_registro(
+                f"Prazer em te conhecer, *{_primeiro_nome(sessao)}*! 😊\n\n"
+                f"Sobre *\"{assunto_ini}\"*, pode me passar mais detalhes para eu já deixar "
+                "tudo certinho pra nossa equipe?",
+                sessao, telefone)
         return _com_registro(
             f"Prazer em te conhecer, *{_primeiro_nome(sessao)}*! 😊\n\n"
             "Pode me contar qual é a sua *dúvida* ou o que você precisa — se eu não "
@@ -993,8 +1027,10 @@ def responder(mensagem: str, telefone: str = None, nome: str = None) -> str:
                 if duvida_rest:
                     return duvida_rest + "\n\nSe precisar falar com um atendente, é só me escrever aqui 😊"
         nome_final = sessao.get("nome_usuario") or _nome_conhecido(telefone, sessao) or nome or ""
+        assunto_ini = (sessao.get("assunto_inicial") or "").strip()
+        assunto_completo = f"{assunto_ini} — {mensagem}" if assunto_ini else mensagem
         sessao = _atualizar(telefone, sessao, nome_usuario=nome_final, etapa="suporte_transferido", avisado=True)
-        _adicionar_suporte(telefone, mensagem, nome=nome_final)
+        _adicionar_suporte(telefone, assunto_completo, nome=nome_final)
         return _com_registro(_msg_suporte_transferido(_primeiro_nome(sessao)), sessao, telefone)
 
     if sessao.get("etapa") == "suporte_transferido":
