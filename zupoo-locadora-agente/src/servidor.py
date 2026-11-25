@@ -252,9 +252,13 @@ def _processar_lote(eventos):
 
 def _agendar_lote(evento):
     chat = _resolver_remetente(evento)
+    msg_id = (evento.get("payload", {}) or {}).get("id")
     with _LOCK:
         item = _PENDENTES.get(chat)
         if item:
+            # Ignora entrega duplicada do mesmo msg_id enviada pelo WAHA na mesma janela
+            if msg_id and any((e.get("payload", {}) or {}).get("id") == msg_id for e in item["eventos"]):
+                return
             item["eventos"].append(evento)
             if item["timer"]:
                 item["timer"].cancel()
