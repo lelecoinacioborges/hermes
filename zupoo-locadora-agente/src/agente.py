@@ -927,7 +927,48 @@ def _pergunta_atual(sessao) -> str:
     return "Como posso te ajudar?"
 
 
-def _bloco_registro(sessao, telefone):
+def _resumo_admin() -> str:
+    """Gera resumo rápido dos leads e chamados para o admin no WhatsApp."""
+    espera = _ler_json_lista(ARQUIVO_ESPERA)
+    rests = _ler_json_lista(ARQUIVO_RESTAURANTES)
+    sups = _ler_json_lista(ARQUIVO_SUPORTE)
+
+    linhas = [
+        "📊 *Resumo Zupoo*",
+        f"🏍️ Lista de espera: *{len(espera)}*",
+        f"🍽️ Restaurantes: *{len(rests)}*",
+        f"💬 Suporte: *{len(sups)}*",
+    ]
+
+    if espera:
+        linhas.append("\n*Últimos da lista de espera:*")
+        for e in espera[-3:]:
+            loc = " - ".join(p for p in (e.get("cidade"), e.get("bairro")) if p) or "—"
+            linhas.append(f"• {e.get('nome', '—')} ({loc}) — {e.get('telefone', '—')}")
+
+    if rests:
+        linhas.append("\n*Últimos restaurantes:*")
+        for r in rests[-3:]:
+            loc = " - ".join(p for p in (r.get("cidade"), r.get("bairro")) if p) or "—"
+            linhas.append(f"• {r.get('nome', '—')} ({loc}) — {r.get('telefone', '—')}")
+
+    if sups:
+        linhas.append("\n*Últimos chamados de suporte:*")
+        for s in sups[-3:]:
+            assunto = (s.get("assunto") or "—")[:50]
+            linhas.append(f"• {s.get('nome', '—')}: {assunto} — {s.get('telefone', '—')}")
+
+    return "\n".join(linhas)
+
+
+def _eh_admin(telefone: str) -> bool:
+    admin = os.environ.get("ZUPOO_ADMIN_CHAT", "5511977556050@c.us")
+    dig_admin = _digitos_telefone(admin)
+    dig_tel = _digitos_telefone(telefone)
+    return bool(dig_admin and dig_tel and dig_admin == dig_tel)
+
+
+def _bloco_registro(sessao, telefone, extra=None):
     registro = {
         "vertical": sessao.get("vertical") or "locadora",
         "nome": sessao.get("nome_usuario"),
@@ -937,17 +978,19 @@ def _bloco_registro(sessao, telefone):
         "lista_espera": sessao.get("lista_espera"),
         "telefone": telefone,
     }
+    if extra:
+        registro.update(extra)
     return "\n\n<<<REGISTRO>>>" + json.dumps(registro, ensure_ascii=False) + "<<<FIM>>>"
 
 
-def _com_registro(resposta, sessao, telefone):
+def _com_registro(resposta, sessao, telefone, extra=None):
     """Anexa o bloco interno assim que houver ao menos o nome.
 
     O servidor remove antes de enviar. Reemitido a cada mensagem para que lead
     que abandona no meio não se perca.
     """
-    if sessao.get("nome_usuario"):
-        return resposta + _bloco_registro(sessao, telefone)
+    if sessao.get("nome_usuario") or extra:
+        return resposta + _bloco_registro(sessao, telefone, extra=extra)
     return resposta
 
 
@@ -978,6 +1021,10 @@ def responder(mensagem: str, telefone: str = None, nome: str = None) -> str:
         clear_session(telefone)
         _remover_telefone_arquivos(telefone)
         return "🔄 Sessão e cadastro de teste reiniciados! Pode mandar uma nova mensagem para começar do zero."
+
+    # Comando administrativo para consultar resumo de leads e suporte
+    if t in ("#resumo", "/resumo") and _eh_admin(telefone):
+        return _resumo_admin()
 
     sessao = get_session(telefone) or {}
 
@@ -1064,8 +1111,9 @@ def responder(mensagem: str, telefone: str = None, nome: str = None) -> str:
         assunto_ini = (sessao.get("assunto_inicial") or "").strip()
         assunto_completo = f"{assunto_ini} — {mensagem}" if assunto_ini else mensagem
         sessao = _atualizar(telefone, sessao, nome_usuario=nome_final, etapa="suporte_transferido", avisado=True)
-        _adicionar_suporte(telefone, assunto_completo, nome=nome_final)
-        return _com_registro(_msg_suporte_transferido(_primeiro_nome(sessao)), sessao, telefone)
+        novo_sup = _adicionar_suporte(telefone, assunto_completo, nome=nome_final)
+        extra = {"novo_registro": True, "tipo_registro": "suporte", "assunto": assunto_completo} if novo_sup else None
+        return _com_registro(_msg_suporte_transferido(_primeiro_nome(sessao)), sessao, telefone, extra=extra)
 
     if sessao.get("etapa") == "suporte_transferido":
         return ""
@@ -1093,16 +1141,18 @@ def responder(mensagem: str, telefone: str = None, nome: str = None) -> str:
             cidade, bairro = _separar_cidade_bairro(local)
             if bairro:
                 sessao = _atualizar(telefone, sessao, cidade=cidade, bairro=bairro, etapa="restaurante_transferido", avisado=True)
-                _adicionar_restaurante(telefone, sessao.get("nome_usuario", ""), cidade, bairro)
-                return _com_registro(_msg_restaurante_em_analise(_primeiro_nome(sessao)), sessao, telefone)
+                novo_rest = _adicionar_restaurante(telefone, sessao.get("nome_usuario", ""), cidade, bairro)
+                extra = {"novo_registro": True, "tipo_registro": "restaurante"} if novo_rest else None
+                return _com_registro(_msg_restaurante_em_analise(_primeiro_nome(sessao)), sessao, telefone, extra=extra)
             sessao = _atualizar(telefone, sessao, cidade=cidade, etapa="restaurante_bairro")
             return _com_registro(RESTAURANTE_PEDE_BAIRRO, sessao, telefone)
         local = _extrair_local(mensagem, t)
         if not local:
             return _com_registro("Não peguei 😅 Em qual *bairro* fica o seu restaurante?", sessao, telefone)
         sessao = _atualizar(telefone, sessao, bairro=local, etapa="restaurante_transferido", avisado=True)
-        _adicionar_restaurante(telefone, sessao.get("nome_usuario", ""), sessao.get("cidade", ""), local)
-        return _com_registro(_msg_restaurante_em_analise(_primeiro_nome(sessao)), sessao, telefone)
+        novo_rest = _adicionar_restaurante(telefone, sessao.get("nome_usuario", ""), sessao.get("cidade", ""), local)
+        extra = {"novo_registro": True, "tipo_registro": "restaurante"} if novo_rest else None
+        return _com_registro(_msg_restaurante_em_analise(_primeiro_nome(sessao)), sessao, telefone, extra=extra)
 
     if sessao.get("etapa") == "restaurante_transferido":
         return ""
@@ -1206,4 +1256,4 @@ def _finalizar_lista(sessao, telefone):
         "Seu nome já está garantido na nossa *lista de espera* ✅ Assim que a nova "
         "frota chegar, você será avisado em primeira mão e terá prioridade na escolha do modelo.\n\n"
         "Enquanto isso, ficou com alguma *dúvida* sobre planos ou valores?",
-        sessao, telefone)
+        sessao, telefone, extra={"novo_registro": True, "tipo_registro": "locadora"})

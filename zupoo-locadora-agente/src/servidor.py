@@ -57,6 +57,12 @@ def _digitos(chat_id):
 AUTORIZADOS = [c.strip() for c in _env("ZUPOO_RESPONDER_APENAS", "").split(",") if c.strip()]
 AUTORIZADOS_DIGITOS = {_digitos(c) for c in AUTORIZADOS}
 ACEITAR_SELFCHAT = _env("ZUPOO_ACEITAR_SELFCHAT", "true").lower() == "true"
+ADMIN_CHAT = _env("ZUPOO_ADMIN_CHAT", "").strip()
+
+AVISO_AUDIO = (
+    "Ainda não consigo ouvir áudios por aqui 😅\n\n"
+    "Pode me mandar por *texto*? Assim consigo te ajudar rapidinho!"
+)
 
 # ids das mensagens que O AGENTE enviou (para não responder ao próprio eco)
 # Persistido em logs/ids.json para sobreviver a reinícios do servidor.
@@ -167,8 +173,99 @@ def _resolver_remetente(evento):
     return remetente
 
 
+def _eh_audio(evento) -> bool:
+    payload = evento.get("payload", {}) or {}
+    tipo = (payload.get("type") or payload.get("messageType") or "").lower()
+    if tipo in ("audio", "ptt"):
+        return True
+    msg = (payload.get("_data", {}) or {}).get("message") or {}
+    return "audioMessage" in msg
+
+
+def _tentar_transcrever_audio(evento):
+    """Se o WAHA entregar media.url (ex.: WAHA Plus), tenta transcrever via OmniRoute."""
+    payload = evento.get("payload", {}) or {}
+    media = payload.get("media") or {}
+    media_url = media.get("url") if isinstance(media, dict) else None
+    base_ai = _env("OPENAI_BASE_URL", "").rstrip("/")
+    if not media_url or not base_ai:
+        return None
+    try:
+        import urllib.request
+        headers_dl = {}
+        if waha_client.api_key():
+            headers_dl["X-Api-Key"] = waha_client.api_key()
+        req_dl = urllib.request.Request(media_url, headers=headers_dl)
+        with urllib.request.urlopen(req_dl, timeout=15) as r:
+            audio_bytes = r.read()
+        boundary = "----ZupooAudioBoundary7MA4YWxkTrZu0gW"
+        partes = [
+            f"--{boundary}\r\nContent-Disposition: form-data; name=\"model\"\r\n\r\nwhisper-1\r\n".encode("utf-8"),
+            f"--{boundary}\r\nContent-Disposition: form-data; name=\"language\"\r\n\r\npt\r\n".encode("utf-8"),
+            f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"audio.ogg\"\r\nContent-Type: audio/ogg\r\n\r\n".encode("utf-8"),
+            audio_bytes,
+            f"\r\n--{boundary}--\r\n".encode("utf-8"),
+        ]
+        corpo = b"".join(partes)
+        headers_ai = {"Content-Type": f"multipart/form-data; boundary={boundary}"}
+        if _env("OPENAI_API_KEY", ""):
+            headers_ai["Authorization"] = f"Bearer {_env('OPENAI_API_KEY', '')}"
+        req_ai = urllib.request.Request(f"{base_ai}/audio/transcriptions", data=corpo, headers=headers_ai, method="POST")
+        with urllib.request.urlopen(req_ai, timeout=25) as r:
+            res = json.loads(r.read().decode("utf-8", "replace"))
+            texto = (res.get("text") or "").strip()
+            if texto:
+                print(f"[audio] transcrito com sucesso: {texto[:80]!r}", flush=True)
+                return texto
+    except Exception as e:
+        print(f"[audio] transcrição indisponível ({e}); usando aviso de texto", flush=True)
+    return None
+
+
+def _notificar_admin(registro):
+    """Envia resumo automático para o WhatsApp do admin quando entra novo lead/suporte."""
+    if not ADMIN_CHAT or not isinstance(registro, dict) or not registro.get("novo_registro"):
+        return
+    tipo = registro.get("tipo_registro") or registro.get("vertical") or "lead"
+    nome = registro.get("nome") or "—"
+    tel = _digitos(registro.get("telefone") or "")
+    loc = " - ".join(p for p in (registro.get("cidade"), registro.get("bairro")) if p) or "—"
+    if tipo == "locadora":
+        plano = registro.get("plano_interesse") or "não informado"
+        msg = (
+            "🔔 *Novo lead — Lista de Espera (Moto)*\n"
+            f"👤 Nome: {nome}\n"
+            f"📍 Local: {loc}\n"
+            f"📋 Plano: {plano}\n"
+            f"📱 Tel: {tel}"
+        )
+    elif tipo == "restaurante":
+        msg = (
+            "🔔 *Novo cadastro — Restaurante*\n"
+            f"👤 Nome: {nome}\n"
+            f"📍 Local: {loc}\n"
+            f"📱 Tel: {tel}"
+        )
+    else:
+        assunto = registro.get("assunto") or "—"
+        msg = (
+            "🔔 *Novo chamado — Suporte*\n"
+            f"👤 Nome: {nome}\n"
+            f"💬 Assunto: {assunto}\n"
+            f"📱 Tel: {tel}"
+        )
+    try:
+        st, dados = waha_client.enviar_texto(ADMIN_CHAT, msg)
+        print(f"[alerta-admin] tipo={tipo} -> {ADMIN_CHAT}, Waha={st}", flush=True)
+        if isinstance(dados, dict):
+            chave_resp = dados.get("key") or {}
+            _marcar_enviado(chave_resp.get("id") or dados.get("id"))
+    except Exception as e:
+        print(f"[erro] falha ao notificar admin: {e}", flush=True)
+
+
 def _processar_mensagem(evento):
-    """Lida com um evento 'message' do Waha. Retorna (relevante, resposta)."""
+    """Lida com um evento 'message' do Waha. Retorna (relevante, resposta, registro)."""
     payload = evento.get("payload", {}) or {}
     _data = payload.get("_data", {}) or {}
     remetente_bruto = payload.get("from") or payload.get("chatId") or ""
@@ -177,26 +274,25 @@ def _processar_mensagem(evento):
     from_me = payload.get("fromMe") is True
     tipo = payload.get("type") or payload.get("messageType") or "chat"
     nome = _data.get("pushName") or payload.get("senderName") or ""
+    eh_audio = _eh_audio(evento)
 
     # Resolve @lid para o telefone real (<digitos>@c.us)
     remetente = _resolver_remetente(evento)
     telefone_ident = remetente
 
-    # Só mensagens de texto (ignora áudio, imagem, ack, etc.)
-    # No Waha NOWEB, mensagens de texto vêm com type=None — então filtramos
-    # apenas os tipos claramente NÃO-texto.
+    # Só mensagens de texto ou áudio (ignora imagem, vídeo, figurinha, ack, etc.)
     TIPOS_NAO_TEXTO = {
-        "image", "audio", "video", "document", "sticker", "location", "contact",
+        "image", "video", "document", "sticker", "location", "contact",
         "poll", "reaction", "ack", "protocol", "protocolmessage", "notification",
         "revoked", "edited", "ciphertext", "newsletter", "event",
     }
-    if not corpo or (tipo and tipo.lower() in TIPOS_NAO_TEXTO):
-        return False, None
+    if not eh_audio and (not corpo or (tipo and tipo.lower() in TIPOS_NAO_TEXTO)):
+        return False, None, None
 
     # Nunca responde ao próprio eco (mensagens que o agente enviou)
     if _ja_enviamos(msg_id):
         print(f"[eco] ignorando msg_id já processado: {msg_id}", flush=True)
-        return False, None
+        return False, None, None
 
     # Marca como processada independente do desfecho (evita re-resposta em retries)
     _marcar_enviado(msg_id)
@@ -207,19 +303,27 @@ def _processar_mensagem(evento):
             f"[ignorado] remetente={remetente} (bruto={remetente_bruto}) não está em ZUPOO_RESPONDER_APENAS={AUTORIZADOS}",
             flush=True,
         )
-        return False, None
+        return False, None, None
 
     # Mensagem enviada pela própria conta (self-chat de teste): só com permissão
     if from_me and not ACEITAR_SELFCHAT:
         print(f"[ignorado] fromMe=True e ACEITAR_SELFCHAT=False para {remetente}", flush=True)
-        return False, None
+        return False, None, None
+
+    # Tratamento de áudio: tenta transcrever via OmniRoute; se não houver mídia (WAHA CORE), pede texto
+    if eh_audio and not corpo:
+        transcrito = _tentar_transcrever_audio(evento)
+        if transcrito:
+            corpo = transcrito
+        else:
+            return True, AVISO_AUDIO, None
 
     resposta_bruta = agente.responder(corpo, telefone=telefone_ident, nome=nome)
     texto, registro = _separar_registro(resposta_bruta)
     if not texto:
         print(f"[silencio] agente retornou resposta vazia para {remetente} (sessão já finalizada/avisada; envie #reset para reiniciar)", flush=True)
-        return False, None
-    return True, texto
+        return False, None, None
+    return True, texto, registro
 
 
 def _processar_lote(eventos):
@@ -229,16 +333,18 @@ def _processar_lote(eventos):
     primeiro = eventos[0]
     textos = [((e.get("payload", {}) or {}).get("body") or (e.get("payload", {}) or {}).get("text") or "").strip() for e in eventos]
     textos = [t for t in textos if t]
-    if not textos:
+    tem_audio = any(_eh_audio(e) for e in eventos)
+    if not textos and not tem_audio:
         return
     combinado = dict(primeiro)
     combinado["payload"] = dict(primeiro.get("payload", {}) or {})
-    combinado["payload"]["body"] = "\n".join(textos)
-    relevante, resposta = _processar_mensagem(combinado)
+    if textos:
+        combinado["payload"]["body"] = "\n".join(textos)
+    relevante, resposta, registro = _processar_mensagem(combinado)
     if not relevante:
         return
     remetente = _resolver_remetente(combinado)
-    entrada_txt = combinado["payload"]["body"].replace("\n", " | ")
+    entrada_txt = (combinado["payload"].get("body") or "[áudio]").replace("\n", " | ")
     saida_txt = resposta.replace("\n", " | ")
     try:
         status, dados = waha_client.enviar_texto(remetente, resposta)
@@ -249,6 +355,8 @@ def _processar_lote(eventos):
         if isinstance(dados, dict):
             chave_resp = dados.get("key") or {}
             _marcar_enviado(chave_resp.get("id") or dados.get("id"))
+        if registro and registro.get("novo_registro"):
+            _notificar_admin(registro)
     except Exception as e:
         print(f"[erro] falha ao enviar lote: {e}", flush=True)
 
