@@ -371,6 +371,45 @@ def _iniciar_suporte(telefone, sessao):
     return SUPORTE_PEDE_NOME
 
 
+def _iniciar_restaurante(telefone, sessao):
+    """Inicia fluxo de restaurante: aproveita nome já conhecido ou pergunta o nome."""
+    nome_salvo = _nome_conhecido(telefone, sessao)
+    if nome_salvo:
+        sessao = _atualizar(telefone, sessao, vertical="restaurante", nome_usuario=nome_salvo, etapa="restaurante_cidade")
+        primeiro = nome_salvo.split()[0]
+        return _com_registro(
+            f"Que alegria ter você com a gente, *{primeiro}*! 🍽️✨\n\n"
+            f"O cadastro do seu restaurante na *{MARCA}* é *100% gratuito* ✅\n\n"
+            "De qual *cidade* é o seu restaurante?",
+            sessao, telefone)
+    _atualizar(telefone, sessao, vertical="restaurante", etapa="restaurante")
+    return RESTAURANTE_ATENDENTE
+
+
+def _iniciar_locadora(telefone, sessao, plano=None, veio_do_menu=False):
+    """Inicia fluxo da locadora: reconhece se já está na lista ou se já sabemos o nome."""
+    if _na_lista(telefone):
+        _atualizar(telefone, sessao, vertical="locadora", etapa="cadastrado")
+        return _msg_ja_cadastrado(telefone)
+    nome_salvo = _nome_conhecido(telefone, sessao)
+    if nome_salvo:
+        sessao = _atualizar(telefone, sessao, vertical="locadora", nome_usuario=nome_salvo, plano=plano, etapa="cidade")
+        primeiro = nome_salvo.split()[0]
+        extra = ""
+        if plano == "anual":
+            extra = "Vi que você tem interesse no *Plano Anual* (a partir de R$ 29/dia) 👍\n"
+        elif plano == "flexivel":
+            extra = "Vi que você tem interesse no *Plano Flexível* (a partir de R$ 35/dia) 👍\n"
+        return _com_registro(
+            f"Ótima escolha, *{primeiro}*! 🏍️ Vai ser um prazer te ajudar.\n\n"
+            f"{extra}De qual *cidade* você é?",
+            sessao, telefone)
+    _atualizar(telefone, sessao, vertical="locadora", etapa="nome", plano=plano)
+    if veio_do_menu and not plano:
+        return ESCOLHEU_LOCADORA
+    return _saudacao_locadora(plano)
+
+
 def _nome_na_lista(telefone: str):
     """Retorna o primeiro nome salvo na lista de espera para personalizar a saudação."""
     digitos = _digitos_telefone(telefone)
@@ -892,14 +931,13 @@ def responder(mensagem: str, telefone: str = None, nome: str = None) -> str:
     vertical_atual = sessao.get("vertical")
     troca = _detectar_troca_vertical(vertical_atual, t)
     if troca == "restaurante":
-        sessao = {}
-        _atualizar(telefone, sessao, vertical="restaurante", etapa="restaurante")
-        return RESTAURANTE_ATENDENTE
+        nome_ant = _nome_conhecido(telefone, sessao)
+        sessao = {"nome_usuario": nome_ant} if nome_ant else {}
+        return _iniciar_restaurante(telefone, sessao)
     if troca == "locadora":
-        sessao = {}
-        plano = _plano_citado(t)
-        _atualizar(telefone, sessao, vertical="locadora", etapa="nome", plano=plano)
-        return _saudacao_locadora(plano)
+        nome_ant = _nome_conhecido(telefone, sessao)
+        sessao = {"nome_usuario": nome_ant} if nome_ant else {}
+        return _iniciar_locadora(telefone, sessao, plano=_plano_citado(t))
 
     # 1. Primeiro contato: detecta vertical ou apresenta menu.
     #    A mensagem de entrada nunca vira nome — era ela que gravava
@@ -907,35 +945,23 @@ def responder(mensagem: str, telefone: str = None, nome: str = None) -> str:
     if not sessao.get("etapa"):
         vertical = _detectar_vertical(t)
         if vertical == "restaurante":
-            _atualizar(telefone, sessao, vertical="restaurante", etapa="restaurante")
-            return RESTAURANTE_ATENDENTE
+            return _iniciar_restaurante(telefone, sessao)
         if vertical == "suporte":
             return _iniciar_suporte(telefone, sessao)
         if vertical is None:
             _atualizar(telefone, sessao, etapa="escolher")
             return BOAS_VINDAS
-        if _na_lista(telefone):
-            _atualizar(telefone, sessao, vertical="locadora", etapa="cadastrado")
-            return _msg_ja_cadastrado(telefone)
-        plano = _plano_citado(t)
-        _atualizar(telefone, sessao, vertical="locadora", etapa="nome", plano=plano)
-        return _saudacao_locadora(plano)
+        return _iniciar_locadora(telefone, sessao, plano=_plano_citado(t))
 
     # 2. Escolha de negócio pendente (aceita 1, 2, 3, emojis ou texto).
     if sessao.get("etapa") == "escolher":
         vertical = _detectar_escolha_menu(mensagem, t)
         if vertical == "restaurante":
-            _atualizar(telefone, sessao, vertical="restaurante", etapa="restaurante")
-            return RESTAURANTE_ATENDENTE
+            return _iniciar_restaurante(telefone, sessao)
         if vertical == "suporte":
             return _iniciar_suporte(telefone, sessao)
         if vertical == "locadora":
-            if _na_lista(telefone):
-                _atualizar(telefone, sessao, vertical="locadora", etapa="cadastrado")
-                return _msg_ja_cadastrado(telefone)
-            _atualizar(telefone, sessao, vertical="locadora", etapa="nome",
-                       plano=_plano_citado(t))
-            return ESCOLHEU_LOCADORA
+            return _iniciar_locadora(telefone, sessao, plano=_plano_citado(t), veio_do_menu=True)
         return REDIRECIONA
 
     # 2b. Fluxo de dúvidas / suporte: coleta nome se não existir, responde dúvida ou encaminha.
@@ -986,7 +1012,10 @@ def responder(mensagem: str, telefone: str = None, nome: str = None) -> str:
             if not valor:
                 return "Não peguei 😅 Qual é o seu *nome*?"
             sessao = _atualizar(telefone, sessao, nome_usuario=valor, etapa="restaurante_cidade")
-            return _com_registro(RESTAURANTE_PEDE_CIDADE, sessao, telefone)
+            return _com_registro(
+                f"Prazer em te conhecer, *{_primeiro_nome(sessao)}*! 😊\n\n"
+                "De qual *cidade* é o seu restaurante?",
+                sessao, telefone)
         if sessao.get("etapa") == "restaurante_cidade":
             local = _extrair_local(mensagem, t)
             if not local:
