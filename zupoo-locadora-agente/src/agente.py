@@ -76,12 +76,13 @@ POLITICAS = _ler_md("politicas.md")
 PLANOS = _ler_md("planos.md")
 
 ARQUIVO_ESPERA = os.path.join(DATA, "lista_espera.json")
+ARQUIVO_RESTAURANTES = os.path.join(DATA, "restaurantes.json")
 
 # --- Mensagens --------------------------------------------------------------
 
 MENU = (
-    "🏍️ *Alugar uma moto*\n"
-    "🍽️ *Cadastrar meu restaurante*"
+    "1️⃣ 🏍️ *Alugar uma moto*\n"
+    "2️⃣ 🍽️ *Cadastrar meu restaurante*"
 )
 
 BOAS_VINDAS = (
@@ -89,7 +90,7 @@ BOAS_VINDAS = (
     "Como posso te ajudar hoje?\n" + MENU
 )
 
-REDIRECIONA = "Só pra eu te direcionar certinho 😊\n\n" + MENU
+REDIRECIONA = "Só pra eu te direcionar certinho 😊 Responda *1* ou *2*:\n\n" + MENU
 
 RESTAURANTE_ATENDENTE = (
     "Que bom ter você com a gente! 🍽️\n\n"
@@ -110,6 +111,12 @@ RESTAURANTE_TRANSFERIDO = (
     "Perfeito! ✅ O seu bairro já está na área de atendimento da Zupoo.\n\n"
     "Vou transferir seu chamado para um atendente, que vai continuar o cadastro "
     "e explicar os próximos passos. 🍽️"
+)
+
+RESP_DUVIDA_RESTAURANTE = (
+    "O cadastro do seu restaurante é *100% gratuito* e sem taxa de adesão ✅\n\n"
+    "Os detalhes de taxas e entregas da sua região são passados pelo nosso "
+    "atendente assim que confirmarmos seu bairro."
 )
 
 BOAS_VINDAS_LOCADORA = (
@@ -190,21 +197,30 @@ RESP_PRECO = (
     "O valor final depende do *modelo* da moto."
 )
 
-# --- Lista de espera (leads) ------------------------------------------------
+# --- Lista de espera (leads) e Restaurantes ---------------------------------
 
 
-def _ler_espera():
-    if os.path.exists(ARQUIVO_ESPERA):
-        with open(ARQUIVO_ESPERA, encoding="utf-8") as f:
+def _ler_json_lista(caminho):
+    if os.path.exists(caminho):
+        with open(caminho, encoding="utf-8") as f:
             return json.load(f)
     return []
 
 
-def _salvar_espera(entrada):
-    lista = _ler_espera()
+def _salvar_json_lista(caminho, entrada):
+    lista = _ler_json_lista(caminho)
     lista.append(entrada)
-    with open(ARQUIVO_ESPERA, "w", encoding="utf-8") as f:
+    os.makedirs(os.path.dirname(caminho), exist_ok=True)
+    with open(caminho, "w", encoding="utf-8") as f:
         json.dump(lista, f, ensure_ascii=False, indent=2)
+
+
+def _ler_espera():
+    return _ler_json_lista(ARQUIVO_ESPERA)
+
+
+def _salvar_espera(entrada):
+    _salvar_json_lista(ARQUIVO_ESPERA, entrada)
 
 
 def _digitos_telefone(telefone: str) -> str:
@@ -221,7 +237,7 @@ def _na_lista(telefone: str) -> bool:
 
 
 def _adicionar_lista_espera(telefone, nome="", cidade="", bairro="", plano=None) -> bool:
-    """Grava o lead. Retorna False se o telefone já estiver na lista."""
+    """Grava o lead da locadora. Retorna False se o telefone já estiver na lista."""
     digitos = _digitos_telefone(telefone)
     if not digitos or _na_lista(telefone):
         return False
@@ -235,6 +251,26 @@ def _adicionar_lista_espera(telefone, nome="", cidade="", bairro="", plano=None)
         "chat_id": telefone,
         "data": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
         "origem": "whatsapp_lead",
+    })
+    return True
+
+
+def _adicionar_restaurante(telefone, nome="", cidade="", bairro="") -> bool:
+    """Grava o lead de restaurante em data/restaurantes.json."""
+    digitos = _digitos_telefone(telefone)
+    if not digitos:
+        return False
+    existentes = _ler_json_lista(ARQUIVO_RESTAURANTES)
+    if any(_digitos_telefone(e.get("telefone", "")) == digitos for e in existentes):
+        return False
+    _salvar_json_lista(ARQUIVO_RESTAURANTES, {
+        "nome": (nome or "").strip() or "—",
+        "cidade": (cidade or "").strip(),
+        "bairro": (bairro or "").strip(),
+        "telefone": digitos,
+        "chat_id": telefone,
+        "data": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
+        "origem": "whatsapp_restaurante",
     })
     return True
 
@@ -264,22 +300,28 @@ def _atualizar(telefone, sessao, **campos):
 
 # --- Roteamento entre os dois negócios --------------------------------------
 #
-# Restaurante é checado antes da locadora: "motoboy" contém "moto", e um
-# restaurante falando de entrega não pode cair no fluxo de aluguel.
+# Restaurante é checado antes da locadora na entrada inicial: "motoboy" contém
+# "moto", e um restaurante falando de entrega não pode cair no fluxo de aluguel.
 #
-# "zupoo" NÃO serve como marcador: a marca cobre os dois negócios. Por isso o
-# roteamento se apoia nos nomes dos planos, que são exclusivos da locadora.
+# Porém, na TROCA de vertical (quando o usuário JÁ está alugando uma moto),
+# palavras como "delivery", "motoboy" ou "entrega" NÃO podem expulsar o
+# entregador para o cadastro de restaurante — só termos inequívocos de
+# estabelecimento fazem a troca.
 
-PADROES_RESTAURANTE = (
+PADROES_TROCA_RESTAURANTE = (
     "restaurante", "lanchonete", "pizzaria", "hamburgueria", "padaria",
     "meu estabelecimento", "estabelecimento", "cadastrar meu", "quero cadastrar",
-    "ser parceiro", "sou parceiro", "lojista", "delivery", "entrega", "entregador",
-    "motoboy", "frete", "coleta",
+    "ser parceiro", "sou parceiro", "lojista", "ifood",
+)
+
+PADROES_RESTAURANTE = PADROES_TROCA_RESTAURANTE + (
+    "delivery", "entrega", "entregador", "motoboy", "frete", "coleta",
 )
 
 PADROES_LOCADORA = (
     "plano flexivel", "plano anual", "plano mensal", "plano semanal",
-    "alugar", "aluguel", "locacao", "locar", "moto", "scooter",
+    "plano de 29", "plano de 35", "alugar", "aluguel", "locacao", "locar",
+    "moto", "scooter",
     # A copy do site vira "a partir de 29 reais" depois da troca de marca.
     "a partir de 29", "apartir de 29", "29/dia", "29 por dia", "35/dia",
 )
@@ -293,11 +335,34 @@ def _detectar_vertical(t: str):
     return None
 
 
+def _detectar_troca_vertical(vertical_atual: str, t: str):
+    """Detecta pedido explícito de troca de vertical sem falsos positivos."""
+    if vertical_atual == "locadora":
+        if any(p in t for p in PADROES_TROCA_RESTAURANTE):
+            return "restaurante"
+        return None
+    if vertical_atual == "restaurante":
+        if any(p in t for p in PADROES_LOCADORA) and not any(p in t for p in PADROES_TROCA_RESTAURANTE):
+            return "locadora"
+        return None
+    return None
+
+
+def _detectar_escolha_menu(mensagem: str, t: str):
+    """Reconhece '1', '2', emojis (🏍️/🍽️) ou texto livre no menu inicial."""
+    limpo = (t or "").strip()
+    if limpo in ("1", "opcao 1", "opção 1", "um") or "🏍" in (mensagem or ""):
+        return "locadora"
+    if limpo in ("2", "opcao 2", "opção 2", "dois") or "🍽" in (mensagem or ""):
+        return "restaurante"
+    return _detectar_vertical(t)
+
+
 def _plano_citado(t: str):
     """Plano nomeado na mensagem de entrada, para a saudação reconhecer."""
-    if "anual" in t:
+    if "anual" in t or "plano de 29" in t or "29/dia" in t or "29 por dia" in t:
         return "anual"
-    if "flexivel" in t:
+    if "flexivel" in t or "plano de 35" in t or "35/dia" in t or "35 por dia" in t:
         return "flexivel"
     return None
 
@@ -308,7 +373,7 @@ RE_PRECO = re.compile(r"\b(preco|precos|quanto|valor|valores|custa|diaria|diaria
 
 
 def _responder_duvida(t: str):
-    """Resposta para dúvida avulsa, ou None se a mensagem não for uma dúvida.
+    """Resposta para dúvida avulsa da locadora, ou None se não for dúvida.
 
     A ordem importa: caução casa com "valor", então vem antes de preço.
     """
@@ -327,16 +392,25 @@ def _responder_duvida(t: str):
         return RESP_MODELO
 
     # Sem exigir o preço junto: o cliente costuma escrever só "quero o plano
-    # anual", e a versão anterior deixava isso cair no fluxo e virar bairro.
-    if "plano anual" in t or ("anual" in t and "plano" in t):
+    # anual" ou "quero o plano de 29".
+    if "plano anual" in t or ("anual" in t and "plano" in t) or "plano de 29" in t or "29 reais" in t:
         return RESP_ANUAL
 
-    if "flexivel" in t:
+    if "flexivel" in t or "plano de 35" in t or "35 reais" in t:
         return RESP_FLEXIVEL
 
     if RE_PRECO.search(t):
         return RESP_PRECO
 
+    return None
+
+
+def _responder_duvida_restaurante(t: str):
+    """Resposta para dúvidas comuns durante o cadastro de restaurante."""
+    if any(p in t for p in ("taxa", "adesao", "comissao", "mensalidade", "custo",
+                            "quanto cobra", "quanto custa", "valor da entrega",
+                            "valor entrega", "gratis", "gratuito", "pago", "pagar")):
+        return RESP_DUVIDA_RESTAURANTE
     return None
 
 
@@ -352,14 +426,23 @@ def _responder_duvida(t: str):
 RE_SIM = re.compile(r"\b(sim|claro|quero|aceito|aceita|pode|bora|ok|isso|positivo|manda|vamos|s)\b")
 RE_NAO = re.compile(r"\b(nao|nem|dispenso)\b")
 
+FRASES_INDECISO = ("nao sei", "ainda nao sei", "nao tenho certeza", "vou pensar", "talvez")
 FRASES_SIM = ("pode colocar", "pode me colocar", "pode por", "entrar na lista",
               "quero entrar", "me adiciona", "coloca eu", "quero sim", "pode sim")
 FRASES_NAO = ("nao quero", "nao obrigado", "sem interesse", "agora nao",
               "nao precisa", "ja tenho", "deixa pra la", "outra hora")
 
+DESPEDIDAS = {
+    "ok", "okk", "blz", "beleza", "obrigado", "obrigada", "valeu", "vlw",
+    "tchau", "ate", "ate mais", "flw", "ta bom", "certo", "combinado",
+    "show", "tranquilo", "de boa",
+}
+
 
 def _intencao(t: str):
     """'sim', 'nao' ou None."""
+    if any(f in t for f in FRASES_INDECISO):
+        return None
     if any(f in t for f in FRASES_NAO):
         return "nao"
     if any(f in t for f in FRASES_SIM):
@@ -383,6 +466,15 @@ def _quer_voltar(t: str) -> bool:
 # --- Captura de nome e local ------------------------------------------------
 
 PREFIXOS_NOME = ("meu nome e ", "me chamo ", "sou o ", "sou a ", "eu sou ", "aqui e o ", "aqui e a ")
+PREFIXOS_LOCAL = (
+    "sou motoboy em ", "trabalho em ", "moro em ", "moro no ", "moro na ",
+    "sou de ", "sou da ", "sou do ", "fico em ", "estou em ",
+    "cidade de ", "cidade ", "no bairro ", "na bairro ", "bairro ",
+)
+PALAVRAS_NAO_NOME = {
+    "quero", "plano", "preciso", "gostaria", "valor", "quanto",
+    "qual", "como", "tem", "onde", "quando", "alugar", "cadastrar",
+}
 
 # No WhatsApp as pessoas mandam em rajada ("Ei", "Oiii", "tudo bem?"). Sem isto
 # cada saudação era consumida como resposta da pergunta da vez, e já gravou
@@ -394,30 +486,63 @@ SAUDACOES = {
 }
 
 
-def _extrair_nome(mensagem: str, t: str):
+def _extrair_nome(mensagem: str, t: str, permitir_estabelecimento: bool = False):
     """Nome limpo, ou None se a mensagem claramente não for um nome."""
-    if "?" in mensagem or t in SAUDACOES or _detectar_vertical(t) or _responder_duvida(t):
+    if "?" in mensagem or t in SAUDACOES or _responder_duvida(t):
         return None
-    limpo = (mensagem or "").strip()
+    # Se o cliente mandou "Gabriel, trabalho com delivery", extrai só o nome antes da vírgula
+    bruto = (mensagem or "").strip()
+    if "," in bruto and not permitir_estabelecimento:
+        candidato = bruto.split(",", 1)[0].strip()
+        if candidato:
+            bruto = candidato
+            t = _normalizar(bruto)
+    if not permitir_estabelecimento and _detectar_vertical(t):
+        return None
+    limpo = bruto
     baixo = _normalizar(limpo)
     for p in PREFIXOS_NOME:
         if baixo.startswith(p):
             limpo = limpo[len(p):].strip()
+            baixo = _normalizar(limpo)
             break
     limpo = limpo.strip(".,!;:")
     if not limpo or len(limpo) > 40 or len(limpo.split()) > 5:
+        return None
+    # Nomes pessoais não contêm dígitos nem começam com verbos de pedido
+    if re.search(r"\d", limpo):
+        return None
+    primeira = _normalizar(limpo.split()[0])
+    if primeira in PALAVRAS_NAO_NOME:
         return None
     return limpo
 
 
 def _extrair_local(mensagem: str, t: str):
-    """Cidade/bairro, ou None quando a mensagem é saudação ou pergunta."""
+    """Cidade/bairro limpos, ou None quando a mensagem é saudação ou pergunta."""
     if "?" in mensagem or t in SAUDACOES:
         return None
     limpo = (mensagem or "").strip().strip(".,!;:")
+    baixo = _normalizar(limpo)
+    for p in PREFIXOS_LOCAL:
+        if baixo.startswith(p):
+            limpo = limpo[len(p):].strip()
+            baixo = _normalizar(limpo)
+            break
+    limpo = limpo.strip(".,!;:")
     if not limpo or len(limpo) > 60:
         return None
     return limpo
+
+
+def _separar_cidade_bairro(local: str):
+    """Separa 'Cidade, Bairro', 'Cidade - Bairro' ou 'Cidade / Bairro'."""
+    for sep in (",", " - ", " / ", "|"):
+        if sep in local:
+            partes = [p.strip() for p in local.split(sep, 1)]
+            if len(partes) == 2 and partes[0] and partes[1]:
+                return partes[0], partes[1]
+    return local, ""
 
 
 def _primeiro_nome(sessao):
@@ -437,11 +562,18 @@ def _pergunta_atual(sessao) -> str:
         return "E de qual *bairro*?"
     if etapa == "lista":
         return PERGUNTA_LISTA
+    if etapa == "restaurante":
+        return "Qual é o seu *nome*?"
+    if etapa == "restaurante_cidade":
+        return "De qual *cidade* é o seu restaurante?"
+    if etapa == "restaurante_bairro":
+        return "Em qual *bairro* fica o seu restaurante?"
     return "Como posso te ajudar?"
 
 
 def _bloco_registro(sessao, telefone):
     registro = {
+        "vertical": sessao.get("vertical") or "locadora",
         "nome": sessao.get("nome_usuario"),
         "cidade": sessao.get("cidade"),
         "bairro": sessao.get("bairro"),
@@ -480,25 +612,29 @@ def _saudacao_locadora(plano):
 
 def responder(mensagem: str, telefone: str = None, nome: str = None) -> str:
     """Resposta para o cliente. String vazia significa não enviar nada."""
-    mensagem = mensagem or ""
+    mensagem = (mensagem or "").strip()
+    if not mensagem:
+        return ""
     t = _normalizar(mensagem)
     sessao = get_session(telefone) or {}
 
     # Se o cliente mudar explicitamente de assunto, troca de fluxo sem manter
-    # cidade/bairro/plano do atendimento anterior. Isso é importante quando o
-    # mesmo número primeiro pergunta sobre motos e depois quer cadastrar um
-    # restaurante.
-    vertical_detectada = _detectar_vertical(t)
-    if sessao.get("vertical") == "locadora" and vertical_detectada == "restaurante":
+    # cidade/bairro/plano do atendimento anterior. Usa regras estritas para não
+    # confundir motoboy/entregador com dono de restaurante.
+    vertical_atual = sessao.get("vertical")
+    troca = _detectar_troca_vertical(vertical_atual, t)
+    if troca == "restaurante":
         sessao = {}
         _atualizar(telefone, sessao, vertical="restaurante", etapa="restaurante")
         return RESTAURANTE_ATENDENTE
-    if sessao.get("vertical") == "restaurante" and vertical_detectada == "locadora":
+    if troca == "locadora":
         sessao = {}
-        _atualizar(telefone, sessao, vertical="locadora", etapa="nome", plano=_plano_citado(t))
-        return _saudacao_locadora(_plano_citado(t))
+        plano = _plano_citado(t)
+        _atualizar(telefone, sessao, vertical="locadora", etapa="nome", plano=plano)
+        return _saudacao_locadora(plano)
 
-    #    nome. A mensagem de entrada nunca vira nome — era ela que gravava
+    # 1. Primeiro contato: detecta vertical ou apresenta menu.
+    #    A mensagem de entrada nunca vira nome — era ela que gravava
     #    todo lead vindo do site como "Quero".
     if not sessao.get("etapa"):
         vertical = _detectar_vertical(t)
@@ -515,9 +651,9 @@ def responder(mensagem: str, telefone: str = None, nome: str = None) -> str:
         _atualizar(telefone, sessao, vertical="locadora", etapa="nome", plano=plano)
         return _saudacao_locadora(plano)
 
-    # 2. Escolha de negócio pendente.
+    # 2. Escolha de negócio pendente (aceita 1, 2, emojis ou texto).
     if sessao.get("etapa") == "escolher":
-        vertical = _detectar_vertical(t)
+        vertical = _detectar_escolha_menu(mensagem, t)
         if vertical == "restaurante":
             _atualizar(telefone, sessao, vertical="restaurante", etapa="restaurante")
             return RESTAURANTE_ATENDENTE
@@ -530,33 +666,36 @@ def responder(mensagem: str, telefone: str = None, nome: str = None) -> str:
             return ESCOLHEU_LOCADORA
         return REDIRECIONA
 
-    # 3. Fluxo do restaurante: coleta nome, cidade e bairro e então transfere.
+    # 3. Fluxo do restaurante: coleta nome, cidade e bairro, persiste e transfere.
     if sessao.get("etapa") in ("restaurante", "restaurante_cidade", "restaurante_bairro"):
         if sessao.get("avisado"):
             return ""
+        duvida_rest = _responder_duvida_restaurante(t)
+        if duvida_rest:
+            return _com_registro(duvida_rest + "\n\n" + _pergunta_atual(sessao), sessao, telefone)
         if sessao.get("etapa") == "restaurante":
-            valor = _extrair_nome(mensagem, t)
+            valor = _extrair_nome(mensagem, t, permitir_estabelecimento=True)
             if not valor:
                 return "Não peguei 😅 Qual é o seu *nome*?"
-            _atualizar(telefone, sessao, nome_usuario=valor, etapa="restaurante_cidade")
-            return RESTAURANTE_PEDE_CIDADE
+            sessao = _atualizar(telefone, sessao, nome_usuario=valor, etapa="restaurante_cidade")
+            return _com_registro(RESTAURANTE_PEDE_CIDADE, sessao, telefone)
         if sessao.get("etapa") == "restaurante_cidade":
             local = _extrair_local(mensagem, t)
             if not local:
-                return "Não peguei 😅 De qual *cidade* é o seu restaurante?"
-            partes = [p.strip() for p in local.split(",")]
-            cidade = partes[0]
-            bairro = partes[1] if len(partes) >= 2 else ""
+                return _com_registro("Não peguei 😅 De qual *cidade* é o seu restaurante?", sessao, telefone)
+            cidade, bairro = _separar_cidade_bairro(local)
             if bairro:
-                _atualizar(telefone, sessao, cidade=cidade, bairro=bairro, etapa="restaurante_transferido", avisado=True)
-                return RESTAURANTE_BAIRRO_EM_ANALISE
-            _atualizar(telefone, sessao, cidade=cidade, etapa="restaurante_bairro")
-            return RESTAURANTE_PEDE_BAIRRO
+                sessao = _atualizar(telefone, sessao, cidade=cidade, bairro=bairro, etapa="restaurante_transferido", avisado=True)
+                _adicionar_restaurante(telefone, sessao.get("nome_usuario", ""), cidade, bairro)
+                return _com_registro(RESTAURANTE_BAIRRO_EM_ANALISE, sessao, telefone)
+            sessao = _atualizar(telefone, sessao, cidade=cidade, etapa="restaurante_bairro")
+            return _com_registro(RESTAURANTE_PEDE_BAIRRO, sessao, telefone)
         local = _extrair_local(mensagem, t)
         if not local:
-            return "Não peguei 😅 Em qual *bairro* fica o seu restaurante?"
-        _atualizar(telefone, sessao, bairro=local, etapa="restaurante_transferido", avisado=True)
-        return RESTAURANTE_BAIRRO_EM_ANALISE
+            return _com_registro("Não peguei 😅 Em qual *bairro* fica o seu restaurante?", sessao, telefone)
+        sessao = _atualizar(telefone, sessao, bairro=local, etapa="restaurante_transferido", avisado=True)
+        _adicionar_restaurante(telefone, sessao.get("nome_usuario", ""), sessao.get("cidade", ""), local)
+        return _com_registro(RESTAURANTE_BAIRRO_EM_ANALISE, sessao, telefone)
 
     if sessao.get("etapa") == "restaurante_transferido":
         return ""
@@ -564,12 +703,14 @@ def responder(mensagem: str, telefone: str = None, nome: str = None) -> str:
     # 4. Já resolvidos. Dúvida sempre tem resposta, mas o aviso de estado é
     #    dito UMA vez: repetir a cada mensagem atrapalha o atendente humano
     #    que assumiu a conversa, e é o que fazia o bot papagaiar sem parar.
-    if sessao.get("etapa") in ("restaurante", "cadastrado", "recusou"):
+    if sessao.get("etapa") in ("cadastrado", "recusou"):
         duvida = _responder_duvida(t)
         if duvida:
             return duvida
         if sessao.get("etapa") == "recusou" and _quer_voltar(t):
             return _finalizar_lista(sessao, telefone)
+        if sessao.get("etapa") == "recusou" and t in DESPEDIDAS:
+            return ""
         if sessao.get("avisado"):
             return ""
         _atualizar(telefone, sessao, avisado=True)
@@ -577,7 +718,7 @@ def responder(mensagem: str, telefone: str = None, nome: str = None) -> str:
             return JA_CADASTRADO
         return CHAMA_ATENDENTE
 
-    # 4. Dúvida no meio do fluxo: responde e retoma de onde parou.
+    # 5. Dúvida no meio do fluxo da locadora: responde e retoma de onde parou.
     duvida = _responder_duvida(t)
     if duvida:
         return _com_registro(duvida + "\n\n" + _pergunta_atual(sessao), sessao, telefone)
@@ -598,9 +739,7 @@ def responder(mensagem: str, telefone: str = None, nome: str = None) -> str:
         local = _extrair_local(mensagem, t)
         if not local:
             return _com_registro("Não peguei 😅 De qual *cidade* você é?", sessao, telefone)
-        partes = [p.strip() for p in local.split(",")]
-        cidade = partes[0]
-        bairro = partes[1] if len(partes) >= 2 else ""
+        cidade, bairro = _separar_cidade_bairro(local)
         if bairro:
             sessao = _atualizar(telefone, sessao, cidade=cidade, bairro=bairro, etapa="lista")
             return _com_registro(AVISO_SEM_MOTO + "\n\n" + PERGUNTA_LISTA, sessao, telefone)

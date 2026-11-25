@@ -89,6 +89,38 @@ def status_sessao():
     return None
 
 
+_LID_CACHE = {}
+
+
+def resolver_lid(lid, sessao=None):
+    """Resolve um identificador @lid para o número real (<digitos>@c.us) via API do Waha.
+
+    Consulta GET /api/{session}/lids/{lid} e mantém cache em memória.
+    """
+    if not lid or not str(lid).endswith("@lid"):
+        return None
+    if lid in _LID_CACHE:
+        return _LID_CACHE[lid]
+    if not base_url():
+        return None
+    sess = sessao or session_name()
+    lid_enc = urllib.parse.quote(str(lid), safe="")
+    status, dados = _requisicao("GET", f"/api/{sess}/lids/{lid_enc}", timeout=5)
+    if status == 200 and isinstance(dados, dict):
+        pn = dados.get("pn") or dados.get("phoneNumber") or ""
+        if pn and "@" in pn:
+            numero = pn.split("@")[0]
+            if numero.isdigit():
+                resolvido = numero + "@c.us"
+                _LID_CACHE[lid] = resolvido
+                return resolvido
+        elif pn and str(pn).isdigit():
+            resolvido = str(pn) + "@c.us"
+            _LID_CACHE[lid] = resolvido
+            return resolvido
+    return None
+
+
 def enviar_texto(chat_id, texto):
     """Envia mensagem de texto para um chat (ex.: 5511999999999@c.us).
 

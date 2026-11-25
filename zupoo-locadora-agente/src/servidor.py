@@ -122,28 +122,65 @@ def _ja_enviamos(msg_id):
         return msg_id in _IDS_ENVIADOS
 
 
-def _processar_mensagem(evento):
-    """Lida com um evento 'message' do Waha. Retorna (relevante, resposta)."""
+def _resolver_remetente(evento):
+    """Resolve o remetente real do evento, convertendo @lid para <digitos>@c.us.
+
+    Ordem de resolução:
+    1. Campos alternativos do payload (_data.key.participantAlt, remoteJidAlt, senderPn)
+    2. Campo me.lid / me.id (quando for self-chat ou próprio número da sessão)
+    3. Consulta à API do Waha GET /api/{session}/lids/{lid} (com cache)
+    """
     payload = evento.get("payload", {}) or {}
     _data = payload.get("_data", {}) or {}
     chave = _data.get("key", {}) or {}
     remetente = payload.get("from") or payload.get("chatId") or ""
+
+    if not remetente.endswith("@lid"):
+        return remetente
+
+    # 1. Campos alternativos no próprio payload
+    alt = (
+        chave.get("participantAlt")
+        or chave.get("remoteJidAlt")
+        or payload.get("remoteJidAlt")
+        or _data.get("senderPn")
+        or ""
+    )
+    if alt:
+        numero = _digitos(alt.split("@")[0])
+        if numero:
+            return numero + "@c.us"
+
+    # 2. Mapeamento do próprio número da sessão (me.lid -> me.id)
+    me = evento.get("me") or {}
+    if me.get("lid") == remetente and me.get("id"):
+        numero = _digitos(str(me.get("id")).split("@")[0])
+        if numero:
+            return numero + "@c.us"
+
+    # 3. API oficial do Waha NOWEB para resolver @lid -> pn
+    resolvido = waha_client.resolver_lid(remetente, sessao=evento.get("session"))
+    if resolvido:
+        print(f"[lid] resolvido {remetente} -> {resolvido}", flush=True)
+        return resolvido
+
+    return remetente
+
+
+def _processar_mensagem(evento):
+    """Lida com um evento 'message' do Waha. Retorna (relevante, resposta)."""
+    payload = evento.get("payload", {}) or {}
+    _data = payload.get("_data", {}) or {}
+    remetente_bruto = payload.get("from") or payload.get("chatId") or ""
     msg_id = payload.get("id")
     corpo = payload.get("body") or payload.get("text") or ""
     from_me = payload.get("fromMe") is True
     tipo = payload.get("type") or payload.get("messageType") or "chat"
     nome = _data.get("pushName") or payload.get("senderName") or ""
 
-    # Mensagens de @lid: o NOWEB pode trazer o telefone real em
-    # participantAlt ou remoteJidAlt. Use o telefone real para a lista de
-    # autorizados e também para enviar a resposta.
+    # Resolve @lid para o telefone real (<digitos>@c.us)
+    remetente = _resolver_remetente(evento)
     telefone_ident = remetente
-    alt = chave.get("participantAlt") or chave.get("remoteJidAlt") or payload.get("remoteJidAlt") or ""
-    if remetente.endswith("@lid") and alt:
-        telefone = alt.split("@")[0]
-        if telefone:
-            telefone_ident = telefone + "@c.us"
-            remetente = telefone_ident
 
     # Só mensagens de texto (ignora áudio, imagem, ack, etc.)
     # No Waha NOWEB, mensagens de texto vêm com type=None — então filtramos
@@ -165,6 +202,10 @@ def _processar_mensagem(evento):
 
     # Responde apenas aos números autorizados (".env" -> ZUPOO_RESPONDER_APENAS)
     if not _permitido(remetente):
+        print(
+            f"[ignorado] remetente={remetente} (bruto={remetente_bruto}) não está em ZUPOO_RESPONDER_APENAS={AUTORIZADOS}",
+            flush=True,
+        )
         return False, None
 
     # Mensagem enviada pela própria conta (self-chat de teste): só com permissão
@@ -193,12 +234,7 @@ def _processar_lote(eventos):
     relevante, resposta = _processar_mensagem(combinado)
     if not relevante:
         return
-    payload = combinado["payload"]
-    chave = payload.get("_data", {}).get("key", {}) or {}
-    remetente = payload.get("from") or ""
-    alt = chave.get("participantAlt") or chave.get("remoteJidAlt") or payload.get("remoteJidAlt") or ""
-    if remetente.endswith("@lid") and alt:
-        remetente = alt.split("@")[0] + "@c.us"
+    remetente = _resolver_remetente(combinado)
     try:
         status, dados = waha_client.enviar_texto(remetente, resposta)
         print(f"[msg-lote] {len(textos)} mensagens -> {remetente}, Waha={status}", flush=True)
@@ -210,12 +246,7 @@ def _processar_lote(eventos):
 
 
 def _agendar_lote(evento):
-    payload = evento.get("payload", {}) or {}
-    chave = payload.get("_data", {}).get("key", {}) or {}
-    chat = payload.get("from") or payload.get("chatId") or ""
-    alt = chave.get("participantAlt") or chave.get("remoteJidAlt") or payload.get("remoteJidAlt") or ""
-    if chat.endswith("@lid") and alt:
-        chat = alt.split("@")[0] + "@c.us"
+    chat = _resolver_remetente(evento)
     with _LOCK:
         item = _PENDENTES.get(chat)
         if item:
